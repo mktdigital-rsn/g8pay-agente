@@ -28,6 +28,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     // Step 1: Personal Data
@@ -48,6 +49,24 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
     selectedDate: "",
     selectedTime: ""
   });
+
+  const isEmbeddable = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "";
+    return (
+      url.includes("calendar.google.com/calendar/appointments/schedules/") ||
+      url.includes("calendar.google.com/appointments/schedules/") ||
+      url.includes("calendar.app.google") ||
+      url.includes("calendly.com")
+    );
+  }, []);
+
+  const embedUrl = useMemo(() => {
+    let url = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "";
+    if ((url.includes("calendar.google.com") || url.includes("calendar.app.google")) && !url.includes("gv=true")) {
+      url = url.includes("?") ? `${url}&gv=true` : `${url}?gv=true`;
+    }
+    return url;
+  }, []);
 
   // Calendar dates generation (Next 14 business days)
   const availableDates = useMemo(() => {
@@ -137,30 +156,79 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
   };
 
   const handleNext = () => {
+    const newErrors: Record<string, string> = {};
+
     if (step === 1) {
-      if (!formData.fullName || !formData.cpf || !formData.birthDate || !formData.email || !formData.whatsapp) {
-        toast.error("Por favor, preencha todos os campos obrigatórios.");
-        return;
+      if (!formData.fullName.trim()) {
+        newErrors.fullName = "Nome completo é obrigatório.";
       }
-      if (formData.cpf.length < 14) {
-        toast.error("CPF inválido.");
-        return;
+      if (!formData.cpf) {
+        newErrors.cpf = "CPF é obrigatório.";
+      } else if (formData.cpf.length < 14) {
+        newErrors.cpf = "CPF inválido.";
       }
-      if (formData.birthDate.length < 10) {
-        toast.error("Data de nascimento inválida.");
+      if (!formData.birthDate) {
+        newErrors.birthDate = "Data de nascimento é obrigatória.";
+      } else if (formData.birthDate.length < 10) {
+        newErrors.birthDate = "Data de nascimento inválida.";
+      }
+      if (!formData.email.trim()) {
+        newErrors.email = "E-mail é obrigatório.";
+      } else if (!formData.email.includes("@")) {
+        newErrors.email = "E-mail inválido.";
+      }
+      if (!formData.whatsapp) {
+        newErrors.whatsapp = "WhatsApp é obrigatório.";
+      } else if (formData.whatsapp.length < 15) { // (00) 00000-0000 has 15 chars
+        newErrors.whatsapp = "WhatsApp inválido.";
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        const firstErrorField = Object.keys(newErrors)[0];
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.focus();
+        }
         return;
       }
     } else if (step === 2) {
-      if (!formData.cep || !formData.street || !formData.number || !formData.neighborhood || !formData.city || !formData.state) {
-        toast.error("Por favor, preencha todos os campos do endereço.");
+      if (!formData.cep) {
+        newErrors.cep = "CEP é obrigatório.";
+      }
+      if (!formData.street.trim()) {
+        newErrors.street = "Logradouro é obrigatório.";
+      }
+      if (!formData.number.trim()) {
+        newErrors.number = "Número é obrigatório.";
+      }
+      if (!formData.neighborhood.trim()) {
+        newErrors.neighborhood = "Bairro é obrigatório.";
+      }
+      if (!formData.city.trim()) {
+        newErrors.city = "Cidade é obrigatória.";
+      }
+      if (!formData.state.trim()) {
+        newErrors.state = "Estado é obrigatório.";
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        const firstErrorField = Object.keys(newErrors)[0];
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.focus();
+        }
         return;
       }
     }
 
+    setErrors({});
     setStep(step + 1);
   };
 
   const handleBack = () => {
+    setErrors({});
     if (step === 1) {
       onBack();
     } else {
@@ -169,16 +237,19 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
   };
 
   const handleScheduleSubmit = async () => {
-    if (!formData.selectedDate || !formData.selectedTime) {
-      toast.error("Por favor, selecione o dia e o horário do agendamento.");
-      return;
-    }
     setLoading(true);
-    // Simulate booking save
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    // Simulate saving commercial lead data
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     setLoading(false);
+
+    // Redirect or open Google Calendar schedule URL in new tab ONLY if not embedded
+    if (!isEmbeddable) {
+      const calendarUrl = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/calendar/appointments/schedules/AcZssZ3d5Hw6Wd_Wf0J9c5bLqQ4X9M1P4s8xR-9kY5w=";
+      window.open(calendarUrl, "_blank");
+    }
+
     setFinished(true);
-    toast.success("Reunião agendada com sucesso!");
+    toast.success(isEmbeddable ? "Agendamento concluído com sucesso!" : "Cadastro salvo! Agendamento aberto no Google Agenda.");
   };
 
   const formatDisplayDate = (dateString: string) => {
@@ -201,44 +272,44 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[650px] bg-[#18181b] border border-white/5 p-8 md:p-12 text-center rounded-[2px] shadow-2xl relative z-10 space-y-8"
+          className="w-full max-w-[700px] bg-[#18181b] border border-white/5 p-12 md:p-16 text-center rounded-[2px] shadow-2xl relative z-10 space-y-10"
         >
           <div className="relative flex justify-center">
-            <div className="w-24 h-24 rounded-full bg-amber-500/10 border-2 border-brand-accent/30 flex items-center justify-center">
-              <CheckCircle2 className="h-12 w-12 text-brand-accent" />
+            <div className="w-28 h-28 rounded-full bg-amber-500/10 border-2 border-brand-accent/30 flex items-center justify-center">
+              <CheckCircle2 className="h-16 w-16 text-brand-accent animate-pulse" />
             </div>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-3xl font-black text-white tracking-tight">Agendamento Confirmado!</h2>
-            <p className="text-neutral-300 text-sm md:text-base max-w-lg mx-auto">
-              Sua reunião de demonstração comercial foi agendada com sucesso para <strong>{formatDisplayDate(formData.selectedDate)}</strong> às <strong>{formData.selectedTime}h</strong>.
+          <div className="space-y-6">
+            <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight">Agendamento Iniciado!</h2>
+            <p className="text-neutral-300 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+              Seu cadastro comercial foi salvo com sucesso e a página de marcação de horários do Google Agenda foi aberta.
             </p>
             
-            <div className="bg-[#141416] border border-white/5 p-5 rounded-sm max-w-md mx-auto space-y-3 text-left">
-              <div className="flex items-center gap-3 text-xs">
-                <Video className="h-5 w-5 text-brand-accent shrink-0" />
+            <div className="bg-[#141416] border border-white/5 p-6 rounded-sm max-w-lg mx-auto space-y-4 text-left">
+              <div className="flex items-center gap-4 text-sm">
+                <Video className="h-6 w-6 text-brand-accent shrink-0" />
                 <div>
-                  <span className="text-neutral-500 block">Link da Reunião (Google Meet):</span>
-                  <a href="https://meet.google.com/new" target="_blank" rel="noreferrer" className="text-brand-accent hover:underline inline-flex items-center gap-1 font-bold">
-                    meet.google.com/g8pay-agendamento <ExternalLink className="h-3 w-3" />
+                  <span className="text-[11px] uppercase tracking-wider text-neutral-500 font-bold block">Página de Agendamento Oficial (Google Calendar)</span>
+                  <a href={process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/calendar/appointments/schedules/AcZssZ3d5Hw6Wd_Wf0J9c5bLqQ4X9M1P4s8xR-9kY5w="} target="_blank" rel="noreferrer" className="text-brand-accent hover:underline inline-flex items-center gap-1 font-black mt-0.5">
+                    Abrir Página de Agendamentos <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 </div>
               </div>
               <div className="h-[1px] bg-white/5" />
-              <div className="flex items-center gap-3 text-xs">
-                <Mail className="h-5 w-5 text-neutral-400 shrink-0" />
-                <p className="text-neutral-400">
-                  Um convite de calendário foi enviado para <strong>{formData.email}</strong> e a conta de destino <strong>mktdigital.rsn@gmail.com</strong>.
+              <div className="flex items-center gap-4 text-sm">
+                <Mail className="h-6 w-6 text-neutral-400 shrink-0" />
+                <p className="text-neutral-300">
+                  Se a nova aba não abriu ou você a fechou sem querer, use o link acima para escolher o dia e hora para falar com a equipe **mktdigital.rsn@gmail.com**.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-6">
             <Button
               onClick={onBack}
-              className="w-full h-14 font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-lg"
+              className="w-full h-16 text-base font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20"
             >
               VOLTAR À TELA INICIAL
             </Button>
@@ -301,52 +372,107 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome Completo</label>
                       <Input
+                        id="fullName"
                         value={formData.fullName}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, fullName: e.target.value }));
+                          if (errors.fullName) setErrors((prev) => { const c = { ...prev }; delete c.fullName; return c; });
+                        }}
                         placeholder="Insira seu nome completo"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.fullName ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.fullName && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.fullName}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
                       <Input
+                        id="cpf"
                         value={formData.cpf}
-                        onChange={handleCpfChange}
+                        onChange={(e) => {
+                          handleCpfChange(e);
+                          if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
+                        }}
                         placeholder="000.000.000-00"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.cpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.cpf && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.cpf}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Data de Nascimento</label>
                       <Input
+                        id="birthDate"
                         value={formData.birthDate}
-                        onChange={handleDateChange}
+                        onChange={(e) => {
+                          handleDateChange(e);
+                          if (errors.birthDate) setErrors((prev) => { const c = { ...prev }; delete c.birthDate; return c; });
+                        }}
                         placeholder="DD/MM/AAAA"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.birthDate ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.birthDate && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.birthDate}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">E-mail</label>
                       <Input
+                        id="email"
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, email: e.target.value }));
+                          if (errors.email) setErrors((prev) => { const c = { ...prev }; delete c.email; return c; });
+                        }}
                         placeholder="contato@exemplo.com"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.email ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.email && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.email}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">WhatsApp</label>
                       <Input
+                        id="whatsapp"
                         value={formData.whatsapp}
-                        onChange={handlePhoneChange}
+                        onChange={(e) => {
+                          handlePhoneChange(e);
+                          if (errors.whatsapp) setErrors((prev) => { const c = { ...prev }; delete c.whatsapp; return c; });
+                        }}
                         placeholder="(00) 00000-0000"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.whatsapp ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.whatsapp && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.whatsapp}
+                        </motion.span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -364,40 +490,74 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CEP</label>
                       <div className="relative">
                         <Input
+                          id="cep"
                           value={formData.cep}
-                          onChange={handleCepChange}
+                          onChange={(e) => {
+                            handleCepChange(e);
+                            if (errors.cep) setErrors((prev) => { const c = { ...prev }; delete c.cep; return c; });
+                          }}
                           placeholder="00000-000"
-                          className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                          className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                            errors.cep ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          }`}
                         />
                         {loading && (
                           <Loader2 className="absolute right-3 top-3 h-5 w-5 animate-spin text-brand-accent" />
                         )}
                       </div>
+                      {errors.cep && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.cep}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Logradouro / Rua</label>
                       <Input
+                        id="street"
                         value={formData.street}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, street: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, street: e.target.value }));
+                          if (errors.street) setErrors((prev) => { const c = { ...prev }; delete c.street; return c; });
+                        }}
                         placeholder="Rua, Avenida, etc."
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.street ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.street && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.street}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Número</label>
                       <Input
+                        id="number"
                         value={formData.number}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, number: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, number: e.target.value }));
+                          if (errors.number) setErrors((prev) => { const c = { ...prev }; delete c.number; return c; });
+                        }}
                         placeholder="123"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.number ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.number && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.number}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Complemento</label>
                       <Input
+                        id="complement"
                         value={formData.complement}
                         onChange={(e) => setFormData((prev) => ({ ...prev, complement: e.target.value }))}
                         placeholder="Apto, Bloco, etc. (Opcional)"
@@ -408,119 +568,121 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Bairro</label>
                       <Input
+                        id="neighborhood"
                         value={formData.neighborhood}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, neighborhood: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, neighborhood: e.target.value }));
+                          if (errors.neighborhood) setErrors((prev) => { const c = { ...prev }; delete c.neighborhood; return c; });
+                        }}
                         placeholder="Bairro"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.neighborhood ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.neighborhood && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.neighborhood}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cidade</label>
                       <Input
+                        id="city"
                         value={formData.city}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, city: e.target.value }));
+                          if (errors.city) setErrors((prev) => { const c = { ...prev }; delete c.city; return c; });
+                        }}
                         placeholder="Cidade"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.city ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                         disabled
                       />
+                      {errors.city && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.city}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">UF / Estado</label>
                       <Input
+                        id="state"
                         value={formData.state}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, state: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, state: e.target.value }));
+                          if (errors.state) setErrors((prev) => { const c = { ...prev }; delete c.state; return c; });
+                        }}
                         placeholder="SP, RJ, etc."
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.state ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                         disabled
                       />
+                      {errors.state && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.state}
+                        </motion.span>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
               {step === 3 && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div className="border-b border-white/5 pb-2">
-                    <h3 className="text-lg font-bold text-white">Agendar Data e Horário</h3>
-                    <p className="text-xs text-neutral-400 text-brand-accent">Selecione uma data comercial e horário com mktdigital.rsn@gmail.com</p>
+                    <h3 className="text-lg font-bold text-white">Agendamento Comercial</h3>
+                    <p className="text-xs text-neutral-400 text-brand-accent">
+                      {isEmbeddable 
+                        ? "Escolha o melhor dia e horário diretamente no painel abaixo." 
+                        : "Selecione o melhor dia e horário no Google Agenda oficial."}
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Date Picker Grid */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1 flex items-center gap-1.5">
-                        <Calendar className="h-4 w-4 text-brand-accent" /> Escolha o Dia
-                      </label>
-                      <div className="grid grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
-                        {availableDates.map((date, idx) => {
-                          const isoDate = date.toISOString().split("T")[0];
-                          const isSelected = formData.selectedDate === isoDate;
-                          const formattedLabel = date.toLocaleDateString("pt-BR", {
-                            day: "2-digit",
-                            month: "short"
-                          });
-                          const weekdayLabel = date.toLocaleDateString("pt-BR", {
-                            weekday: "short"
-                          }).replace(".", "");
+                  {isEmbeddable ? (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="w-full bg-white border border-white/10 rounded-sm overflow-hidden h-[550px] relative"
+                    >
+                      <iframe
+                        src={embedUrl}
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                        style={{ border: 0 }}
+                        className="w-full h-full"
+                        allow="camera; microphone; geolocation"
+                      />
+                    </motion.div>
+                  ) : (
+                    <div className="bg-[#141416] border border-white/5 p-8 rounded-sm space-y-6 text-center max-w-xl mx-auto">
+                      <div className="flex justify-center">
+                        <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/20">
+                          <Calendar className="h-8 w-8 text-blue-400" />
+                        </div>
+                      </div>
 
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setFormData((prev) => ({ ...prev, selectedDate: isoDate }))}
-                              className={`p-3 border rounded-sm flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
-                                isSelected
-                                  ? "bg-brand-accent border-brand-accent text-white shadow-md shadow-brand-accent/20"
-                                  : "bg-white/[0.02] border-white/10 text-neutral-300 hover:border-brand-accent/50"
-                              }`}
-                            >
-                              <span className="text-[10px] uppercase font-semibold text-neutral-400 group-hover:text-white leading-none">
-                                {weekdayLabel}
-                              </span>
-                              <span className="text-base font-black mt-1">
-                                {formattedLabel}
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div className="space-y-2">
+                        <h4 className="text-base font-black text-white">Integração Google Calendar</h4>
+                        <p className="text-sm text-neutral-400 leading-relaxed">
+                          Ao clicar em confirmar, salvaremos seu contato comercial no sistema da G8Pay e abriremos a tela oficial de agendamentos da conta <strong className="text-white">mktdigital.rsn@gmail.com</strong> para você escolher o dia e hora de sua preferência.
+                        </p>
+                      </div>
+
+                      <div className="bg-white/[0.02] border border-white/5 p-4 rounded-sm text-left text-xs space-y-2">
+                        <p className="text-neutral-500 uppercase font-black tracking-widest text-[9px]">Dados do Lead:</p>
+                        <p className="text-neutral-300">Contato: <strong className="text-white">{formData.fullName}</strong></p>
+                        <p className="text-neutral-300">E-mail: <strong className="text-white">{formData.email}</strong></p>
+                        <p className="text-neutral-300">WhatsApp: <strong className="text-white">{formData.whatsapp}</strong></p>
                       </div>
                     </div>
-
-                    {/* Time Slots List */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1 flex items-center gap-1.5">
-                        <Clock className="h-4 w-4 text-brand-accent" /> Horários Disponíveis
-                      </label>
-                      {formData.selectedDate ? (
-                        <div className="grid grid-cols-2 gap-2">
-                          {timeSlots.map((time, idx) => {
-                            const isSelected = formData.selectedTime === time;
-
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setFormData((prev) => ({ ...prev, selectedTime: time }))}
-                                className={`p-3 border text-sm font-bold rounded-sm text-center transition-all cursor-pointer ${
-                                  isSelected
-                                    ? "bg-brand-accent border-brand-accent text-white shadow-md"
-                                    : "bg-white/[0.02] border-white/10 text-neutral-300 hover:border-brand-accent/50"
-                                }`}
-                              >
-                                {time} h
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="h-[200px] flex items-center justify-center border border-dashed border-white/10 text-center p-4 bg-white/[0.01]">
-                          <span className="text-xs text-neutral-500 font-bold">Por favor, selecione primeiro um dia no calendário ao lado.</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -529,9 +691,8 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
           {/* Action Footer */}
           <div className="mt-8 pt-6 border-t border-white/5 flex gap-4">
             <Button
-              variant="outline"
               onClick={handleBack}
-              className="h-12 border-white/10 text-neutral-400 hover:text-white cursor-pointer px-6"
+              className="h-12 bg-transparent border border-white/10 text-neutral-300 hover:text-white hover:bg-white/[0.02] hover:border-white/20 rounded-[2px] transition-all cursor-pointer px-6"
             >
               Voltar
             </Button>
@@ -552,10 +713,10 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    SALVANDO AGENDAMENTO...
+                    {isEmbeddable ? "CONCLUINDO..." : "SALVANDO AGENDAMENTO..."}
                   </>
                 ) : (
-                  "AGENDAR REUNIÃO"
+                  isEmbeddable ? "CONFIRMAR E CONCLUIR" : "AGENDAR REUNIÃO"
                 )}
               </Button>
             )}

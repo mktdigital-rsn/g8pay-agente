@@ -27,6 +27,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     // Step 1: Personal Data
@@ -113,41 +114,100 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   };
 
   const handleNext = () => {
+    const newErrors: Record<string, string> = {};
+
     if (step === 1) {
-      if (!formData.fullName || !formData.cpf || !formData.birthDate || !formData.email || !formData.whatsapp) {
-        toast.error("Por favor, preencha todos os campos obrigatórios.");
-        return;
+      if (!formData.fullName.trim()) {
+        newErrors.fullName = "Nome completo é obrigatório.";
       }
-      if (formData.cpf.length < 14) {
-        toast.error("CPF inválido.");
-        return;
+      if (!formData.cpf) {
+        newErrors.cpf = "CPF é obrigatório.";
+      } else if (formData.cpf.length < 14) {
+        newErrors.cpf = "CPF inválido.";
       }
-      if (formData.birthDate.length < 10) {
-        toast.error("Data de nascimento inválida.");
+      if (!formData.birthDate) {
+        newErrors.birthDate = "Data de nascimento é obrigatória.";
+      } else if (formData.birthDate.length < 10) {
+        newErrors.birthDate = "Data de nascimento inválida.";
+      }
+      if (!formData.email.trim()) {
+        newErrors.email = "E-mail é obrigatório.";
+      } else if (!formData.email.includes("@")) {
+        newErrors.email = "E-mail inválido.";
+      }
+      if (!formData.whatsapp) {
+        newErrors.whatsapp = "WhatsApp é obrigatório.";
+      } else if (formData.whatsapp.length < 15) { // (00) 00000-0000 has 15 chars
+        newErrors.whatsapp = "WhatsApp inválido.";
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        const firstErrorField = Object.keys(newErrors)[0];
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.focus();
+        }
         return;
       }
     } else if (step === 2) {
-      if (!formData.cep || !formData.street || !formData.number || !formData.neighborhood || !formData.city || !formData.state) {
-        toast.error("Por favor, preencha todos os campos do endereço.");
+      if (!formData.cep) {
+        newErrors.cep = "CEP é obrigatório.";
+      }
+      if (!formData.street.trim()) {
+        newErrors.street = "Logradouro é obrigatório.";
+      }
+      if (!formData.number.trim()) {
+        newErrors.number = "Número é obrigatório.";
+      }
+      if (!formData.neighborhood.trim()) {
+        newErrors.neighborhood = "Bairro é obrigatório.";
+      }
+      if (!formData.city.trim()) {
+        newErrors.city = "Cidade é obrigatória.";
+      }
+      if (!formData.state.trim()) {
+        newErrors.state = "Estado é obrigatório.";
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        const firstErrorField = Object.keys(newErrors)[0];
+        const element = document.getElementById(firstErrorField);
+        if (element) {
+          element.focus();
+        }
         return;
       }
     } else if (step === 3) {
       if (formData.hasReferral) {
-        if (!formData.referrerName || !formData.referrerCpf) {
-          toast.error("Preencha o nome e o CPF do indicador.");
-          return;
+        if (!formData.referrerName.trim()) {
+          newErrors.referrerName = "Nome do indicador é obrigatório.";
         }
-        if (formData.referrerCpf.length < 14) {
-          toast.error("CPF do indicador inválido.");
+        if (!formData.referrerCpf) {
+          newErrors.referrerCpf = "CPF do indicador é obrigatório.";
+        } else if (formData.referrerCpf.length < 14) {
+          newErrors.referrerCpf = "CPF do indicador inválido.";
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+          setErrors(newErrors);
+          const firstErrorField = Object.keys(newErrors)[0];
+          const element = document.getElementById(firstErrorField);
+          if (element) {
+            element.focus();
+          }
           return;
         }
       }
     }
 
+    setErrors({});
     setStep(step + 1);
   };
 
   const handleBack = () => {
+    setErrors({});
     if (step === 1) {
       onBack();
     } else {
@@ -181,36 +241,36 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[600px] bg-[#18181b] border border-white/5 p-8 md:p-12 text-center rounded-[2px] shadow-2xl relative z-10 space-y-8"
+          className="w-full max-w-[700px] bg-[#18181b] border border-white/5 p-12 md:p-16 text-center rounded-[2px] shadow-2xl relative z-10 space-y-10"
         >
           <div className="relative flex justify-center">
             <motion.div
               initial={{ scale: 0.3, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 150 }}
-              className="w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
+              className="w-28 h-28 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
             >
-              <CheckCircle2 className="h-12 w-12 text-emerald-500 animate-pulse" />
-              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-1 rounded-full">
-                <Sparkles className="h-4 w-4" />
+              <CheckCircle2 className="h-16 w-16 text-emerald-500 animate-pulse" />
+              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-1.5 rounded-full shadow-lg">
+                <Sparkles className="h-5 w-5" />
               </div>
             </motion.div>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-3xl font-black text-white tracking-tight">Cadastro Concluído!</h2>
-            <p className="text-neutral-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">
+          <div className="space-y-6">
+            <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight">Cadastro Concluído!</h2>
+            <p className="text-neutral-300 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
               Parabéns, <strong>{formData.fullName}</strong>! Seus dados foram cadastrados em nossa base de agentes parceiros G8Pay.
             </p>
-            <p className="text-neutral-500 text-xs max-w-sm mx-auto">
+            <p className="text-neutral-400 text-sm md:text-base max-w-md mx-auto">
               Em breve nossa equipe entrará em contato via WhatsApp no número <strong>{formData.whatsapp}</strong> para finalizar sua ativação e envio de materiais.
             </p>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-6">
             <Button
               onClick={onBack}
-              className="w-full h-14 font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-lg shadow-brand-accent/20"
+              className="w-full h-16 text-base font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20"
             >
               VOLTAR À TELA INICIAL
             </Button>
@@ -307,52 +367,107 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome Completo</label>
                       <Input
+                        id="fullName"
                         value={formData.fullName}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, fullName: e.target.value }));
+                          if (errors.fullName) setErrors((prev) => { const c = { ...prev }; delete c.fullName; return c; });
+                        }}
                         placeholder="Insira seu nome completo"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.fullName ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.fullName && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.fullName}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
                       <Input
+                        id="cpf"
                         value={formData.cpf}
-                        onChange={(e) => handleCpfChange(e, "cpf")}
+                        onChange={(e) => {
+                          handleCpfChange(e, "cpf");
+                          if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
+                        }}
                         placeholder="000.000.000-00"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.cpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.cpf && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.cpf}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Data de Nascimento</label>
                       <Input
+                        id="birthDate"
                         value={formData.birthDate}
-                        onChange={handleDateChange}
+                        onChange={(e) => {
+                          handleDateChange(e);
+                          if (errors.birthDate) setErrors((prev) => { const c = { ...prev }; delete c.birthDate; return c; });
+                        }}
                         placeholder="DD/MM/AAAA"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.birthDate ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.birthDate && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.birthDate}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">E-mail</label>
                       <Input
+                        id="email"
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, email: e.target.value }));
+                          if (errors.email) setErrors((prev) => { const c = { ...prev }; delete c.email; return c; });
+                        }}
                         placeholder="contato@exemplo.com"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.email ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.email && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.email}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">WhatsApp</label>
                       <Input
+                        id="whatsapp"
                         value={formData.whatsapp}
-                        onChange={handlePhoneChange}
+                        onChange={(e) => {
+                          handlePhoneChange(e);
+                          if (errors.whatsapp) setErrors((prev) => { const c = { ...prev }; delete c.whatsapp; return c; });
+                        }}
                         placeholder="(00) 00000-0000"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.whatsapp ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.whatsapp && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.whatsapp}
+                        </motion.span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -370,40 +485,74 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CEP</label>
                       <div className="relative">
                         <Input
+                          id="cep"
                           value={formData.cep}
-                          onChange={handleCepChange}
+                          onChange={(e) => {
+                            handleCepChange(e);
+                            if (errors.cep) setErrors((prev) => { const c = { ...prev }; delete c.cep; return c; });
+                          }}
                           placeholder="00000-000"
-                          className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                          className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                            errors.cep ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          }`}
                         />
                         {loading && (
                           <Loader2 className="absolute right-3 top-3 h-5 w-5 animate-spin text-brand-accent" />
                         )}
                       </div>
+                      {errors.cep && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.cep}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Logradouro / Rua</label>
                       <Input
+                        id="street"
                         value={formData.street}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, street: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, street: e.target.value }));
+                          if (errors.street) setErrors((prev) => { const c = { ...prev }; delete c.street; return c; });
+                        }}
                         placeholder="Rua, Avenida, etc."
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.street ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.street && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.street}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Número</label>
                       <Input
+                        id="number"
                         value={formData.number}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, number: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, number: e.target.value }));
+                          if (errors.number) setErrors((prev) => { const c = { ...prev }; delete c.number; return c; });
+                        }}
                         placeholder="123"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.number ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.number && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.number}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Complemento</label>
                       <Input
+                        id="complement"
                         value={formData.complement}
                         onChange={(e) => setFormData((prev) => ({ ...prev, complement: e.target.value }))}
                         placeholder="Apto, Bloco, etc. (Opcional)"
@@ -414,33 +563,66 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Bairro</label>
                       <Input
+                        id="neighborhood"
                         value={formData.neighborhood}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, neighborhood: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, neighborhood: e.target.value }));
+                          if (errors.neighborhood) setErrors((prev) => { const c = { ...prev }; delete c.neighborhood; return c; });
+                        }}
                         placeholder="Bairro"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.neighborhood ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                       />
+                      {errors.neighborhood && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.neighborhood}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cidade</label>
                       <Input
+                        id="city"
                         value={formData.city}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, city: e.target.value }));
+                          if (errors.city) setErrors((prev) => { const c = { ...prev }; delete c.city; return c; });
+                        }}
                         placeholder="Cidade"
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.city ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                         disabled
                       />
+                      {errors.city && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.city}
+                        </motion.span>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">UF / Estado</label>
                       <Input
+                        id="state"
                         value={formData.state}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, state: e.target.value }))}
+                        onChange={(e) => {
+                          setFormData((prev) => ({ ...prev, state: e.target.value }));
+                          if (errors.state) setErrors((prev) => { const c = { ...prev }; delete c.state; return c; });
+                        }}
                         placeholder="SP, RJ, etc."
-                        className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.state ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
                         disabled
                       />
+                      {errors.state && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.state}
+                        </motion.span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -492,20 +674,42 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                           <div className="space-y-1.5 md:col-span-2">
                             <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome do Indicador</label>
                             <Input
+                              id="referrerName"
                               value={formData.referrerName}
-                              onChange={(e) => setFormData((prev) => ({ ...prev, referrerName: e.target.value }))}
+                              onChange={(e) => {
+                                setFormData((prev) => ({ ...prev, referrerName: e.target.value }));
+                                if (errors.referrerName) setErrors((prev) => { const c = { ...prev }; delete c.referrerName; return c; });
+                              }}
                               placeholder="Nome completo do padrinho"
-                              className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                              className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                                errors.referrerName ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                              }`}
                             />
+                            {errors.referrerName && (
+                              <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                                {errors.referrerName}
+                              </motion.span>
+                            )}
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF do Indicador</label>
                             <Input
+                              id="referrerCpf"
                               value={formData.referrerCpf}
-                              onChange={(e) => handleCpfChange(e, "referrerCpf")}
+                              onChange={(e) => {
+                                handleCpfChange(e, "referrerCpf");
+                                if (errors.referrerCpf) setErrors((prev) => { const c = { ...prev }; delete c.referrerCpf; return c; });
+                              }}
                               placeholder="000.000.000-00"
-                              className="h-12 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                              className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                                errors.referrerCpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                              }`}
                             />
+                            {errors.referrerCpf && (
+                              <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                                {errors.referrerCpf}
+                              </motion.span>
+                            )}
                           </div>
                         </motion.div>
                       )}
@@ -521,48 +725,86 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     <p className="text-xs text-neutral-400">Confira com calma todas as informações fornecidas.</p>
                   </div>
 
-                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="space-y-6 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
                     {/* Component 1: Personal Summary */}
-                    <div className="bg-[#141416] p-4 border border-white/5 rounded-sm space-y-2">
-                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-widest flex items-center gap-2">
-                        <User className="h-4 w-4" /> Dados Pessoais
+                    <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
+                        <User className="h-5 w-5" /> Dados Pessoais
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div><span className="text-neutral-500">Nome:</span> <p className="text-white font-bold">{formData.fullName}</p></div>
-                        <div><span className="text-neutral-500">CPF:</span> <p className="text-white font-bold">{formData.cpf}</p></div>
-                        <div><span className="text-neutral-500">Data de Nasc.:</span> <p className="text-white font-bold">{formData.birthDate}</p></div>
-                        <div><span className="text-neutral-500">WhatsApp:</span> <p className="text-white font-bold">{formData.whatsapp}</p></div>
-                        <div className="col-span-2"><span className="text-neutral-500">E-mail:</span> <p className="text-white font-bold">{formData.email}</p></div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome completo</span> 
+                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.fullName}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF</span> 
+                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.cpf}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Data de Nascimento</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.birthDate}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">WhatsApp</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.whatsapp}</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">E-mail</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.email}</p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Component 2: Address Summary */}
-                    <div className="bg-[#141416] p-4 border border-white/5 rounded-sm space-y-2">
-                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-widest flex items-center gap-2">
-                        <MapPin className="h-4 w-4" /> Endereço
+                    <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
+                        <MapPin className="h-5 w-5" /> Endereço
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="col-span-2"><span className="text-neutral-500">Logradouro:</span> <p className="text-white font-bold">{formData.street}, {formData.number} {formData.complement ? `- ${formData.complement}` : ""}</p></div>
-                        <div><span className="text-neutral-500">Bairro:</span> <p className="text-white font-bold">{formData.neighborhood}</p></div>
-                        <div><span className="text-neutral-500">CEP:</span> <p className="text-white font-bold">{formData.cep}</p></div>
-                        <div><span className="text-neutral-500">Cidade:</span> <p className="text-white font-bold">{formData.city}</p></div>
-                        <div><span className="text-neutral-500">UF / Estado:</span> <p className="text-white font-bold">{formData.state}</p></div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div className="sm:col-span-2">
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Logradouro</span> 
+                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.street}, {formData.number} {formData.complement ? `- ${formData.complement}` : ""}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Bairro</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.neighborhood}</p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CEP</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.cep}</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Cidade / UF</span> 
+                          <p className="text-base font-black text-white mt-0.5">{formData.city} - {formData.state}</p>
+                        </div>
                       </div>
                     </div>
 
                     {/* Component 3: Indication Summary */}
-                    <div className="bg-[#141416] p-4 border border-white/5 rounded-sm space-y-2">
-                      <h4 className="text-xs font-black uppercase text-brand-accent tracking-widest flex items-center gap-2">
-                        <Users className="h-4 w-4" /> Canal de Entrada
+                    <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
+                        <Users className="h-5 w-5" /> Canal de Entrada
                       </h4>
                       {formData.hasReferral ? (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="col-span-2"><span className="text-neutral-500">Forma:</span> <p className="text-emerald-400 font-bold">Indicado por Parceiro</p></div>
-                          <div><span className="text-neutral-500">Indicador:</span> <p className="text-white font-bold">{formData.referrerName}</p></div>
-                          <div><span className="text-neutral-500">CPF do Indicador:</span> <p className="text-white font-bold">{formData.referrerCpf}</p></div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
+                            <p className="text-emerald-400 font-black tracking-tight mt-0.5">Indicado por Parceiro</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome do Indicador</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.referrerName}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF do Indicador</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.referrerCpf}</p>
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-xs font-bold text-neutral-400">Sem indicação direta. (Conheceu a G8Pay de forma espontânea)</p>
+                        <div>
+                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
+                          <p className="text-neutral-400 font-black mt-0.5">Sem indicação direta. (Conheceu a G8Pay de forma espontânea)</p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -574,9 +816,8 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
           {/* Action Footer */}
           <div className="mt-8 pt-6 border-t border-white/5 flex gap-4">
             <Button
-              variant="outline"
               onClick={handleBack}
-              className="h-12 border-white/10 text-neutral-400 hover:text-white cursor-pointer px-6"
+              className="h-12 bg-transparent border border-white/10 text-neutral-300 hover:text-white hover:bg-white/[0.02] hover:border-white/20 rounded-[2px] transition-all cursor-pointer px-6"
             >
               Voltar
             </Button>
