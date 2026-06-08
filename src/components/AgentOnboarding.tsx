@@ -241,36 +241,36 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[700px] bg-[#18181b] border border-white/5 p-12 md:p-16 text-center rounded-[2px] shadow-2xl relative z-10 space-y-10"
+          className="w-full max-w-[750px] bg-[#18181b] border border-white/5 p-16 md:p-20 text-center rounded-[2px] shadow-2xl relative z-10 space-y-12"
         >
           <div className="relative flex justify-center">
             <motion.div
               initial={{ scale: 0.3, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 150 }}
-              className="w-28 h-28 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
+              className="w-32 h-32 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
             >
-              <CheckCircle2 className="h-16 w-16 text-emerald-500 animate-pulse" />
-              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-1.5 rounded-full shadow-lg">
-                <Sparkles className="h-5 w-5" />
+              <CheckCircle2 className="h-20 w-20 text-emerald-500 animate-pulse" />
+              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-2 rounded-full shadow-lg">
+                <Sparkles className="h-6 w-6" />
               </div>
             </motion.div>
           </div>
 
-          <div className="space-y-6">
-            <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight">Cadastro Concluído!</h2>
-            <p className="text-neutral-300 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+          <div className="space-y-8">
+            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tight">Cadastro Concluído!</h2>
+            <p className="text-neutral-200 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
               Parabéns, <strong>{formData.fullName}</strong>! Seus dados foram cadastrados em nossa base de agentes parceiros G8Pay.
             </p>
-            <p className="text-neutral-400 text-sm md:text-base max-w-md mx-auto">
-              Em breve nossa equipe entrará em contato via WhatsApp no número <strong>{formData.whatsapp}</strong> para finalizar sua ativação e envio de materiais.
+            <p className="text-neutral-400 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+              Em breve nossa equipe entrará em contato via WhatsApp no número <strong className="text-brand-accent">{formData.whatsapp}</strong> para finalizar sua ativação e envio de materiais.
             </p>
           </div>
 
-          <div className="pt-6">
+          <div className="pt-8">
             <Button
               onClick={onBack}
-              className="w-full h-16 text-base font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20"
+              className="w-full h-20 text-lg font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20 cursor-pointer"
             >
               VOLTAR À TELA INICIAL
             </Button>
