@@ -329,6 +329,43 @@ export async function POST(request: NextRequest) {
         throw new Error("Could not retrieve key_signer for the registered agent.");
       }
 
+      // Step B2: Position the signature (pins) on page 5
+      try {
+        const addpinsUrl = `${d4signBaseUrl}/documents/${docUuid}/addpins?tokenAPI=${d4signApiToken}&cryptKey=${d4signCryptKey}`;
+        const pinsBody = {
+          pins: [
+            {
+              document: docUuid,
+              email: email,
+              page: 5,
+              page_width: 794,
+              page_height: 1123,
+              position_x: 225,
+              position_y: 635,
+              type: 0 // 0 = Signature
+            }
+          ]
+        };
+
+        const addpinsRes = await fetch(addpinsUrl, {
+          method: "POST",
+          body: JSON.stringify(pinsBody),
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        });
+
+        if (!addpinsRes.ok) {
+          const errText = await addpinsRes.text();
+          console.error(`D4Sign addpins failed: ${errText} (continuing anyway)`);
+        } else {
+          console.log(`Successfully positioned D4Sign signature pin for ${email} on page 5`);
+        }
+      } catch (pinError) {
+        console.error("Error positioning D4Sign signature pin (continuing anyway):", pinError);
+      }
+
       // Step C: Send document for signature (sendtosigner)
       const sendUrl = `${d4signBaseUrl}/documents/${docUuid}/sendtosigner?tokenAPI=${d4signApiToken}&cryptKey=${d4signCryptKey}`;
       const sendBody = {
@@ -372,11 +409,13 @@ export async function POST(request: NextRequest) {
         throw new Error(`D4Sign signaturelink response did not contain link: ${JSON.stringify(sigLinkData)}`);
       }
 
+      const pdfBase64 = Buffer.from(pdfOutBytes).toString("base64");
       return NextResponse.json({
         success: true,
         signatureLink: signatureLink,
         documentUuid: docUuid,
         pdfUrl: localPdfUrl,
+        pdfBase64: pdfBase64,
         isMock: false
       });
 

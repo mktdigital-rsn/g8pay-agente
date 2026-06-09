@@ -13,7 +13,9 @@ import {
   Mail,
   Loader2,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Maximize2,
+  X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,8 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [signatureLink, setSignatureLink] = useState("");
   const [isMock, setIsMock] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     // Step 1: Personal Data
@@ -246,7 +250,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         throw new Error(data.error || "Erro ao gerar contrato");
       }
 
-      if (data.isMock && data.pdfBase64) {
+      if (data.pdfBase64) {
         // Decode base64 and create a local client-side Blob URL
         const byteCharacters = atob(data.pdfBase64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -256,9 +260,16 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: "application/pdf" });
         const blobUrl = URL.createObjectURL(blob);
-        setSignatureLink(blobUrl);
+        setPdfPreviewUrl(blobUrl);
+        
+        if (data.isMock) {
+          setSignatureLink(blobUrl);
+        } else {
+          setSignatureLink(data.signatureLink || "");
+        }
       } else {
         setSignatureLink(data.signatureLink || "");
+        setPdfPreviewUrl(data.pdfUrl || "");
       }
       setIsMock(!!data.isMock);
 
@@ -284,72 +295,129 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
       <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#0c0a09] theme-g8">
         <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[30%] h-[30%] bg-primary/5 rounded-full blur-[100px]" />
-
+ 
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[750px] bg-[#18181b] border border-white/5 p-16 md:p-20 text-center rounded-[2px] shadow-2xl relative z-10 space-y-12"
+          className="w-full max-w-[700px] bg-[#18181b] border border-white/5 p-6 md:p-8 text-center rounded-[2px] shadow-2xl relative z-10 space-y-6"
         >
           <div className="relative flex justify-center">
             <motion.div
               initial={{ scale: 0.3, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, type: "spring", stiffness: 150 }}
-              className="w-32 h-32 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
+              className="w-16 h-16 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center relative"
             >
-              <CheckCircle2 className="h-20 w-20 text-emerald-500 animate-pulse" />
-              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-2 rounded-full shadow-lg">
-                <Sparkles className="h-6 w-6" />
+              <CheckCircle2 className="h-8 w-8 text-emerald-500 animate-pulse" />
+              <div className="absolute -top-1 -right-1 bg-brand-accent text-white p-1 rounded-full shadow-lg">
+                <Sparkles className="h-4 w-4" />
               </div>
             </motion.div>
           </div>
-
-          <div className="space-y-8">
-            <h2 className="text-5xl md:text-6xl font-black text-white tracking-tight">Cadastro Concluído!</h2>
-            <p className="text-neutral-200 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-              Parabéns, <strong>{formData.fullName}</strong>! Seus dados foram cadastrados em nossa base de agentes parceiros G8Pay.
+ 
+          <div className="space-y-4">
+            <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight">Cadastro e Contrato Gerados!</h2>
+            <p className="text-neutral-200 text-xs md:text-sm max-w-xl mx-auto leading-relaxed">
+              Parabéns, <strong>{formData.fullName}</strong>! Seu cadastro foi concluído com sucesso e o seu contrato de agente comercial autônomo G8Pay foi gerado.
             </p>
             
-            {signatureLink && (
-              <div className="bg-[#141416] border border-white/5 p-8 rounded-sm max-w-xl mx-auto space-y-6">
-                <div className="space-y-2 text-center">
-                  <h3 className="text-lg font-bold text-white uppercase tracking-wider text-brand-accent">Termo de Adesão de Agente</h3>
-                  <p className="text-sm text-neutral-400">
-                    O seu termo de adesão ao programa de agentes G8Pay foi gerado. Por favor, realize a assinatura digital para iniciar suas operações.
+            {pdfPreviewUrl && (
+              <div className="bg-[#141416] border border-white/5 p-5 rounded-sm max-w-xl mx-auto space-y-4">
+                <div className="space-y-1 text-center">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider text-brand-accent">Termo de Adesão de Agente</h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Você pode revisar o documento preenchido na janela abaixo antes de assinar.
                   </p>
                 </div>
+
+                {/* PDF Viewer IFrame with Expand Button */}
+                <div className="w-full h-[320px] border border-white/10 rounded-sm overflow-hidden bg-neutral-950 relative group">
+                  <iframe
+                    src={`${pdfPreviewUrl}#toolbar=0&navpanes=0`}
+                    className="w-full h-full border-0"
+                    title="Pré-visualização do Contrato"
+                  />
+                  <div className="absolute top-3 right-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewOpen(true)}
+                      className="h-9 w-9 bg-black/60 hover:bg-black/80 border border-white/10 rounded-full cursor-pointer flex items-center justify-center text-white shadow-lg backdrop-blur-sm transition-all hover:scale-105 active:scale-95"
+                      title="Expandir visualização"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
                 
-                <Button
-                  onClick={() => window.open(signatureLink, "_blank")}
-                  className="w-full h-16 text-base font-black tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 rounded-[2px] transition-all shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-3 animate-pulse"
-                >
-                  <Sparkles className="h-5 w-5" />
-                  ASSINAR CONTRATO DIGITALMENTE
-                </Button>
-                
-                {isMock && (
-                  <p className="text-xs text-amber-500 font-medium text-center">
-                    ⚠️ Modo de demonstração: o link acima abrirá o PDF preenchido localmente para visualização.
-                  </p>
+                {signatureLink && (
+                  <>
+                    <Button
+                      onClick={() => window.open(signatureLink, "_blank")}
+                      className="w-full h-14 text-sm font-black tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 rounded-[2px] transition-all shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-2 animate-pulse mt-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      ASSINAR CONTRATO DIGITALMENTE
+                    </Button>
+                    
+                    {isMock && (
+                      <p className="text-[10px] text-amber-500 font-medium text-center">
+                        ⚠️ Modo de demonstração: o link acima abrirá o PDF preenchido localmente em tela cheia.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
-
-            <p className="text-neutral-400 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
-              Em breve nossa equipe entrará em contato via WhatsApp no número <strong className="text-brand-accent">{formData.whatsapp}</strong> para finalizar sua ativação e envio de materiais.
+ 
+            <p className="text-neutral-400 text-xs md:text-sm max-w-xl mx-auto leading-relaxed pt-2">
+              Em breve nossa equipe entrará em contato via WhatsApp no número <strong className="text-brand-accent">{formData.whatsapp}</strong> para finalizar sua ativação.
             </p>
           </div>
-
-          <div className="pt-8">
+ 
+          <div className="pt-2">
             <Button
               onClick={onBack}
-              className="w-full h-20 text-lg font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20 cursor-pointer"
+              className="w-full h-14 text-sm font-black tracking-widest text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all shadow-xl shadow-brand-accent/20 cursor-pointer"
             >
               VOLTAR À TELA INICIAL
             </Button>
           </div>
         </motion.div>
+ 
+        {/* Modal for PDF Fullscreen Preview */}
+        <AnimatePresence>
+          {isPreviewOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                className="w-full max-w-5xl bg-[#18181b] border border-white/10 rounded-[2px] p-6 relative flex flex-col space-y-4 shadow-2xl"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Visualização Completa do Contrato</h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsPreviewOpen(false)}
+                    className="p-1.5 hover:bg-white/5 rounded-full transition-colors group cursor-pointer"
+                  >
+                    <X className="h-5 w-5 text-white/50 group-hover:text-white" />
+                  </button>
+                </div>
+                
+                <div className="w-full h-[75vh] border border-white/10 rounded-sm overflow-hidden bg-neutral-950">
+                  <iframe
+                    src={`${pdfPreviewUrl}#toolbar=1`}
+                    className="w-full h-full border-0"
+                    title="Pré-visualização Completa do Contrato"
+                  />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
