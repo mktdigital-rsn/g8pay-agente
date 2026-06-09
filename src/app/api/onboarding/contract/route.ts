@@ -59,22 +59,43 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Load PDF Template
-    const pdfTemplateName = "TERMO DE ADESÃO AO PROGRAMA DE AGENTES COMERCIAIS AUTÔNOMOS G8PAY - v1.1 15122025.pdf";
-    const pdfPath = path.join(process.cwd(), pdfTemplateName);
-    let pdfBytes: Buffer;
+    const pdfTemplateName = "termo_adesao_template.pdf";
+    let pdfBytes: Buffer | null = null;
 
+    // A. Try loading from public/ directory
     try {
-      pdfBytes = fs.readFileSync(pdfPath);
+      const publicPdfPath = path.join(process.cwd(), "public", pdfTemplateName);
+      pdfBytes = fs.readFileSync(publicPdfPath);
     } catch (e) {
-      // Fallback search for any file starting with TERMO and ending with .pdf in root
-      const files = fs.readdirSync(process.cwd());
-      const matchedFile = files.find(f => f.startsWith("TERMO") && f.endsWith(".pdf"));
-      if (matchedFile) {
-        pdfBytes = fs.readFileSync(path.join(process.cwd(), matchedFile));
-      } else {
-        console.error("PDF template not found in root.");
+      console.log("Could not load PDF template from public/ directory via fs, trying root...");
+    }
+
+    // B. Try loading from root directory
+    if (!pdfBytes) {
+      try {
+        const rootPdfPath = path.join(process.cwd(), pdfTemplateName);
+        pdfBytes = fs.readFileSync(rootPdfPath);
+      } catch (e) {
+        console.log("Could not load PDF template from root directory via fs, trying HTTP fetch fallback...");
+      }
+    }
+
+    // C. HTTP Fetch fallback (perfect for serverless functions on Netlify/Vercel where files are not bundled)
+    if (!pdfBytes) {
+      try {
+        const baseUrl = request.nextUrl.origin;
+        const fetchUrl = `${baseUrl}/${pdfTemplateName}`;
+        console.log(`Attempting to fetch template via HTTP: ${fetchUrl}`);
+        const fetchRes = await fetch(fetchUrl);
+        if (!fetchRes.ok) {
+          throw new Error(`HTTP fetch status ${fetchRes.status}`);
+        }
+        const arrayBuffer = await fetchRes.arrayBuffer();
+        pdfBytes = Buffer.from(arrayBuffer);
+      } catch (fetchError: any) {
+        console.error("PDF template not found locally or via HTTP fetch:", fetchError);
         return NextResponse.json(
-          { error: "Modelo de contrato PDF não encontrado no servidor." },
+          { error: "Modelo de contrato PDF não pôde ser carregado no servidor." },
           { status: 500 }
         );
       }
@@ -163,17 +184,21 @@ export async function POST(request: NextRequest) {
     // Save PDF
     const pdfOutBytes = await pdfDoc.save();
 
-    // 3. Save a local backup copy to public/contratos
+    // 3. Save a local backup copy to public/contratos (wrapped in try/catch for read-only serverless filesystems)
     const cleanCpf = cpf.replace(/\D/g, "");
-    const contratosDir = path.join(process.cwd(), "public", "contratos");
-    if (!fs.existsSync(contratosDir)) {
-      fs.mkdirSync(contratosDir, { recursive: true });
-    }
     const localPdfFilename = `contrato_${cleanCpf}.pdf`;
-    const localPdfPath = path.join(contratosDir, localPdfFilename);
-    fs.writeFileSync(localPdfPath, pdfOutBytes);
-    
     const localPdfUrl = `/contratos/${localPdfFilename}`;
+    
+    try {
+      const contratosDir = path.join(process.cwd(), "public", "contratos");
+      if (!fs.existsSync(contratosDir)) {
+        fs.mkdirSync(contratosDir, { recursive: true });
+      }
+      const localPdfPath = path.join(contratosDir, localPdfFilename);
+      fs.writeFileSync(localPdfPath, pdfOutBytes);
+    } catch (fsError) {
+      console.warn("Could not save local PDF backup (this is normal on read-only serverless environments like Netlify):", fsError);
+    }
 
     // 4. Integrate with D4Sign
     const d4signApiToken = process.env.D4SIGN_API_TOKEN;
@@ -184,12 +209,14 @@ export async function POST(request: NextRequest) {
     const isConfigured = !!(d4signApiToken && d4signSafeUuid);
 
     if (!isConfigured) {
-      console.warn("D4Sign integration is not configured. Falling back to local PDF link.");
+      console.warn("D4Sign integration is not configured. Returning mock PDF.");
+      const pdfBase64 = Buffer.from(pdfOutBytes).toString("base64");
       return NextResponse.json({
         success: true,
         signatureLink: localPdfUrl,
         isMock: true,
         pdfUrl: localPdfUrl,
+        pdfBase64: pdfBase64,
         message: "Cadastro concluído. D4Sign em modo simulação (abrirá o PDF preenchido)."
       });
     }
@@ -354,13 +381,14 @@ export async function POST(request: NextRequest) {
       });
 
     } catch (d4Error: any) {
-      console.error("D4Sign API error:", d4Error);
-      // Fallback to local link on API errors so user flow remains functional
+      console.error("D4Sign API error, falling back to mock PDF:", d4Error);
+      const pdfBase64 = Buffer.from(pdfOutBytes).toString("base64");
       return NextResponse.json({
         success: true,
         signatureLink: localPdfUrl,
         isMock: true,
         pdfUrl: localPdfUrl,
+        pdfBase64: pdfBase64,
         warning: "A API da D4Sign retornou um erro, mas o contrato foi gerado localmente.",
         errorDetail: d4Error.message
       });

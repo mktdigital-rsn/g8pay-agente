@@ -246,7 +246,20 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         throw new Error(data.error || "Erro ao gerar contrato");
       }
 
-      setSignatureLink(data.signatureLink || "");
+      if (data.isMock && data.pdfBase64) {
+        // Decode base64 and create a local client-side Blob URL
+        const byteCharacters = atob(data.pdfBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: "application/pdf" });
+        const blobUrl = URL.createObjectURL(blob);
+        setSignatureLink(blobUrl);
+      } else {
+        setSignatureLink(data.signatureLink || "");
+      }
       setIsMock(!!data.isMock);
 
       toast.success("Cadastro realizado com sucesso!");
