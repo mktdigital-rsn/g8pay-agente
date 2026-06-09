@@ -28,6 +28,8 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   const [loading, setLoading] = useState(false);
   const [finished, setFinished] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [signatureLink, setSignatureLink] = useState("");
+  const [isMock, setIsMock] = useState(false);
 
   const [formData, setFormData] = useState({
     // Step 1: Personal Data
@@ -217,11 +219,44 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
 
   const handleSubmit = async () => {
     setLoading(true);
-    // Simulate API registration request
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setLoading(false);
-    setFinished(true);
-    toast.success("Cadastro realizado com sucesso!");
+    try {
+      const response = await fetch("/api/onboarding/contract", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: formData.fullName,
+          cpf: formData.cpf,
+          email: formData.email,
+          whatsapp: formData.whatsapp,
+          cep: formData.cep,
+          street: formData.street,
+          number: formData.number,
+          complement: formData.complement,
+          neighborhood: formData.neighborhood,
+          city: formData.city,
+          state: formData.state
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao gerar contrato");
+      }
+
+      setSignatureLink(data.signatureLink || "");
+      setIsMock(!!data.isMock);
+
+      toast.success("Cadastro realizado com sucesso!");
+      setFinished(true);
+    } catch (error: any) {
+      console.error("Error submitting onboarding:", error);
+      toast.error(error.message || "Falha ao processar o cadastro. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const stepsInfo = [
@@ -262,6 +297,32 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
             <p className="text-neutral-200 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
               Parabéns, <strong>{formData.fullName}</strong>! Seus dados foram cadastrados em nossa base de agentes parceiros G8Pay.
             </p>
+            
+            {signatureLink && (
+              <div className="bg-[#141416] border border-white/5 p-8 rounded-sm max-w-xl mx-auto space-y-6">
+                <div className="space-y-2 text-center">
+                  <h3 className="text-lg font-bold text-white uppercase tracking-wider text-brand-accent">Termo de Adesão de Agente</h3>
+                  <p className="text-sm text-neutral-400">
+                    O seu termo de adesão ao programa de agentes G8Pay foi gerado. Por favor, realize a assinatura digital para iniciar suas operações.
+                  </p>
+                </div>
+                
+                <Button
+                  onClick={() => window.open(signatureLink, "_blank")}
+                  className="w-full h-16 text-base font-black tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 rounded-[2px] transition-all shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-3 animate-pulse"
+                >
+                  <Sparkles className="h-5 w-5" />
+                  ASSINAR CONTRATO DIGITALMENTE
+                </Button>
+                
+                {isMock && (
+                  <p className="text-xs text-amber-500 font-medium text-center">
+                    ⚠️ Modo de demonstração: o link acima abrirá o PDF preenchido localmente para visualização.
+                  </p>
+                )}
+              </div>
+            )}
+
             <p className="text-neutral-400 text-base md:text-lg max-w-xl mx-auto leading-relaxed">
               Em breve nossa equipe entrará em contato via WhatsApp no número <strong className="text-brand-accent">{formData.whatsapp}</strong> para finalizar sua ativação e envio de materiais.
             </p>
