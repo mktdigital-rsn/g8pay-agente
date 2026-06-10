@@ -34,6 +34,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   const [isMock, setIsMock] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [editingSection, setEditingSection] = useState<"personal" | "address" | "referral" | null>(null);
 
   const [formData, setFormData] = useState({
     // Step 1: Personal Data
@@ -250,6 +251,9 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         throw new Error(data.error || "Erro ao gerar contrato");
       }
 
+      let finalPdfUrl = "";
+      let finalSigLink = "";
+
       if (data.pdfBase64) {
         // Decode base64 and create a local client-side Blob URL
         const byteCharacters = atob(data.pdfBase64);
@@ -261,17 +265,35 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         const blob = new Blob([byteArray], { type: "application/pdf" });
         const blobUrl = URL.createObjectURL(blob);
         setPdfPreviewUrl(blobUrl);
+        finalPdfUrl = blobUrl;
         
         if (data.isMock) {
           setSignatureLink(blobUrl);
+          finalSigLink = blobUrl;
         } else {
           setSignatureLink(data.signatureLink || "");
+          finalSigLink = data.signatureLink || "";
         }
       } else {
         setSignatureLink(data.signatureLink || "");
         setPdfPreviewUrl(data.pdfUrl || "");
+        finalPdfUrl = data.pdfUrl || "";
+        finalSigLink = data.signatureLink || "";
       }
       setIsMock(!!data.isMock);
+
+      // Save contract info to localStorage for dashboard retrieval
+      const contractData = {
+        fullName: formData.fullName,
+        cpf: formData.cpf,
+        email: formData.email,
+        whatsapp: formData.whatsapp,
+        date: new Date().toLocaleDateString("pt-BR"),
+        pdfPreviewUrl: finalPdfUrl,
+        signatureLink: finalSigLink,
+        isMock: !!data.isMock
+      };
+      localStorage.setItem("signedContract", JSON.stringify(contractData));
 
       toast.success("Cadastro realizado com sucesso!");
       setFinished(true);
@@ -870,83 +892,323 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                   <div className="space-y-6 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
                     {/* Component 1: Personal Summary */}
                     <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
-                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
-                        <User className="h-5 w-5" /> Dados Pessoais
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="flex items-center gap-2">
+                          <User className="h-5 w-5" /> Dados Pessoais
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSection(editingSection === "personal" ? null : "personal")}
+                          className="text-[10px] text-neutral-400 hover:text-brand-accent transition-colors font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          {editingSection === "personal" ? "Cancelar" : "Editar"}
+                        </button>
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome completo</span> 
-                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.fullName}</p>
+
+                      {editingSection === "personal" ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-left">
+                          <div className="sm:col-span-2 space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome completo</label>
+                            <Input
+                              value={formData.fullName}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, fullName: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
+                            <Input
+                              value={formData.cpf}
+                              onChange={(e) => handleCpfChange(e, "cpf")}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Data de Nascimento</label>
+                            <Input
+                              value={formData.birthDate}
+                              onChange={(e) => handleDateChange(e)}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">WhatsApp</label>
+                            <Input
+                              value={formData.whatsapp}
+                              onChange={(e) => handlePhoneChange(e)}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">E-mail</label>
+                            <Input
+                              value={formData.email}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="sm:col-span-2 pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!formData.fullName.trim()) return toast.error("Nome completo é obrigatório.");
+                                if (formData.cpf.length < 14) return toast.error("CPF inválido.");
+                                if (formData.birthDate.length < 10) return toast.error("Data de nascimento inválida.");
+                                if (!formData.email.trim() || !formData.email.includes("@")) return toast.error("E-mail inválido.");
+                                if (formData.whatsapp.length < 15) return toast.error("WhatsApp inválido.");
+                                setEditingSection(null);
+                              }}
+                              className="px-4 h-9 bg-brand-accent hover:bg-brand-accent-hover text-white text-xs font-bold rounded-[2px] cursor-pointer"
+                            >
+                              Salvar
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF</span> 
-                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.cpf}</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome completo</span> 
+                            <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.fullName}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF</span> 
+                            <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.cpf}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Data de Nascimento</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.birthDate}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">WhatsApp</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.whatsapp}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">E-mail</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.email}</p>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Data de Nascimento</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.birthDate}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">WhatsApp</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.whatsapp}</p>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">E-mail</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.email}</p>
-                        </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Component 2: Address Summary */}
                     <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
-                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
-                        <MapPin className="h-5 w-5" /> Endereço
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="flex items-center gap-2">
+                          <MapPin className="h-5 w-5" /> Endereço
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSection(editingSection === "address" ? null : "address")}
+                          className="text-[10px] text-neutral-400 hover:text-brand-accent transition-colors font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          {editingSection === "address" ? "Cancelar" : "Editar"}
+                        </button>
                       </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                        <div className="sm:col-span-2">
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Logradouro</span> 
-                          <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.street}, {formData.number} {formData.complement ? `- ${formData.complement}` : ""}</p>
+
+                      {editingSection === "address" ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-left">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CEP</label>
+                            <Input
+                              value={formData.cep}
+                              onChange={handleCepChange}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="sm:col-span-2 space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Logradouro / Rua</label>
+                            <Input
+                              value={formData.street}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, street: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Número</label>
+                            <Input
+                              value={formData.number}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, number: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Complemento</label>
+                            <Input
+                              value={formData.complement}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, complement: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Bairro</label>
+                            <Input
+                              value={formData.neighborhood}
+                              onChange={(e) => setFormData((prev) => ({ ...prev, neighborhood: e.target.value }))}
+                              className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                            />
+                          </div>
+                          <div className="sm:col-span-2 space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Cidade</label>
+                            <Input
+                              value={formData.city}
+                              disabled
+                              className="h-10 bg-white/[0.02] border-white/10 text-white/50 rounded-[2px]"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">UF</label>
+                            <Input
+                              value={formData.state}
+                              disabled
+                              className="h-10 bg-white/[0.02] border-white/10 text-white/50 rounded-[2px]"
+                            />
+                          </div>
+                          <div className="sm:col-span-3 pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!formData.cep.trim()) return toast.error("CEP é obrigatório.");
+                                if (!formData.street.trim()) return toast.error("Logradouro é obrigatório.");
+                                if (!formData.number.trim()) return toast.error("Número é obrigatório.");
+                                if (!formData.neighborhood.trim()) return toast.error("Bairro é obrigatório.");
+                                if (!formData.city.trim()) return toast.error("Cidade é obrigatória.");
+                                if (!formData.state.trim()) return toast.error("Estado é obrigatório.");
+                                setEditingSection(null);
+                              }}
+                              className="px-4 h-9 bg-brand-accent hover:bg-brand-accent-hover text-white text-xs font-bold rounded-[2px] cursor-pointer"
+                            >
+                              Salvar
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Bairro</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.neighborhood}</p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Logradouro</span> 
+                            <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.street}, {formData.number} {formData.complement ? `- ${formData.complement}` : ""}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Bairro</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.neighborhood}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CEP</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.cep}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Cidade / UF</span> 
+                            <p className="text-base font-black text-white mt-0.5">{formData.city} - {formData.state}</p>
+                          </div>
                         </div>
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CEP</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.cep}</p>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Cidade / UF</span> 
-                          <p className="text-base font-black text-white mt-0.5">{formData.city} - {formData.state}</p>
-                        </div>
-                      </div>
+                      )}
                     </div>
 
                     {/* Component 3: Indication Summary */}
                     <div className="bg-[#141416] p-6 border border-white/5 rounded-sm space-y-4">
-                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center gap-2 border-b border-white/5 pb-2">
-                        <Users className="h-5 w-5" /> Canal de Entrada
+                      <h4 className="text-sm font-black uppercase text-brand-accent tracking-widest flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="flex items-center gap-2">
+                          <Users className="h-5 w-5" /> Canal de Entrada
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSection(editingSection === "referral" ? null : "referral")}
+                          className="text-[10px] text-neutral-400 hover:text-brand-accent transition-colors font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          {editingSection === "referral" ? "Cancelar" : "Editar"}
+                        </button>
                       </h4>
-                      {formData.hasReferral ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                          <div className="sm:col-span-2">
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
-                            <p className="text-emerald-400 font-black tracking-tight mt-0.5">Indicado por Parceiro</p>
+
+                      {editingSection === "referral" ? (
+                        <div className="space-y-4 text-sm text-left">
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-neutral-400 block">Foi indicado por um consultor G8Pay?</label>
+                            <div className="flex gap-4">
+                              <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, hasReferral: true }))}
+                                className={`flex-1 h-11 border font-bold uppercase text-[10px] tracking-wider rounded-[2px] transition-all cursor-pointer ${
+                                  formData.hasReferral
+                                    ? "bg-brand-accent border-brand-accent text-white"
+                                    : "bg-white/[0.02] border-white/10 text-neutral-400 hover:bg-white/[0.05]"
+                                }`}
+                              >
+                                Sim
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, hasReferral: false }))}
+                                className={`flex-1 h-11 border font-bold uppercase text-[10px] tracking-wider rounded-[2px] transition-all cursor-pointer ${
+                                  !formData.hasReferral
+                                    ? "bg-brand-accent border-brand-accent text-white"
+                                    : "bg-white/[0.02] border-white/10 text-neutral-400 hover:bg-white/[0.05]"
+                                }`}
+                              >
+                                Não
+                              </button>
+                            </div>
                           </div>
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome do Indicador</span> 
-                            <p className="text-base font-black text-white mt-0.5">{formData.referrerName}</p>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF do Indicador</span> 
-                            <p className="text-base font-black text-white mt-0.5">{formData.referrerCpf}</p>
+
+                          {formData.hasReferral && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-white/5 pt-3">
+                              <div className="space-y-1.5 md:col-span-2">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome do Indicador</label>
+                                <Input
+                                  value={formData.referrerName}
+                                  onChange={(e) => setFormData((prev) => ({ ...prev, referrerName: e.target.value }))}
+                                  className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF do Indicador</label>
+                                <Input
+                                  value={formData.referrerCpf}
+                                  onChange={(e) => handleCpfChange(e, "referrerCpf")}
+                                  className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (formData.hasReferral) {
+                                  if (!formData.referrerName.trim()) return toast.error("Nome do indicador é obrigatório.");
+                                  if (formData.referrerCpf.length < 14) return toast.error("CPF do indicador inválido.");
+                                }
+                                setEditingSection(null);
+                              }}
+                              className="px-4 h-9 bg-brand-accent hover:bg-brand-accent-hover text-white text-xs font-bold rounded-[2px] cursor-pointer"
+                            >
+                              Salvar
+                            </button>
                           </div>
                         </div>
                       ) : (
-                        <div>
-                          <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
-                          <p className="text-neutral-400 font-black mt-0.5">Sem indicação direta. (Conheceu a G8Pay de forma espontânea)</p>
-                        </div>
+                        <>
+                          {formData.hasReferral ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                              <div className="sm:col-span-2">
+                                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
+                                <p className="text-emerald-400 font-black tracking-tight mt-0.5">Indicado por Parceiro</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome do Indicador</span> 
+                                <p className="text-base font-black text-white mt-0.5">{formData.referrerName}</p>
+                              </div>
+                              <div>
+                                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF do Indicador</span> 
+                                <p className="text-base font-black text-white mt-0.5">{formData.referrerCpf}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
+                              <p className="text-neutral-400 font-black mt-0.5">Sem indicação direta. (Conheceu a G8Pay de forma espontânea)</p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -974,7 +1236,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
             ) : (
               <Button
                 onClick={handleSubmit}
-                disabled={loading}
+                disabled={loading || editingSection !== null}
                 className="flex-1 h-12 font-black tracking-widest text-white bg-gradient-to-r from-brand-accent to-brand-secondary hover:brightness-110 rounded-[2px] transition-all cursor-pointer shadow-lg shadow-brand-accent/20"
               >
                 {loading ? (
@@ -982,6 +1244,8 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     CONCLUINDO CADASTRO...
                   </>
+                ) : editingSection !== null ? (
+                  "SALVE AS ALTERAÇÕES PARA CONCLUIR"
                 ) : (
                   "CONFIRMAR E CONCLUIR"
                 )}

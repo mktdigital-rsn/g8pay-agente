@@ -50,43 +50,10 @@ interface MenuItem {
 
 const menuGroups: { label?: string; items: MenuItem[] }[] = [
   {
-    items: [{ icon: Home, label: "Resumo", href: "/dashboard" }]
-  },
-  {
     items: [
-      { icon: Clock, label: "Agendamentos", href: "/dashboard/agendamentos" },
-      { icon: Banknote, label: "Cobranças", href: "/dashboard/cobrancas" },
-      { icon: CreditCard, label: "Cartões", href: "/dashboard/cartoes" },
-      { icon: FileText, label: "Extrato", href: "/dashboard/extrato" },
-      { 
-        icon: Palmtree, 
-        label: "Lazer", 
-        href: "#", 
-        submenu: [
-          { icon: Plane, label: "Aéreo", href: "/dashboard/lazer/aereo" }
-        ] 
-      },
-      { icon: Wallet, label: "Pagamentos", href: "/dashboard/pagamentos" },
-      { icon: Smartphone, label: "PIX", href: "/dashboard/pix" },
-      { icon: Cpu, label: "POS/MAQUI.", href: "/dashboard/maquininhas" },
-      { icon: Smartphone, label: "Recargas", href: "/dashboard/recargas" },
-      { icon: ArrowUpRight, label: "Transferência", href: "/dashboard/transferencia" },
-      { 
-        icon: Car, 
-        label: "Veículos", 
-        href: "#", 
-        submenu: [
-          { icon: Car, label: "Meus Veículos", href: "/dashboard/veiculos/meus-veiculos" },
-          { icon: Car, label: "Débitos Veiculares", href: "/dashboard/veiculos/debitos-veiculares" },
-          { icon: Shield, label: "Proteção Veicular", href: "/dashboard/veiculos/protecao-veicular" }
-        ] 
-      },
-    ]
-  },
-  {
-    items: [
-      { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" },
-      { icon: HelpCircle, label: "Ajuda", href: "/dashboard/ajuda" },
+      { icon: Home, label: "Início", href: "/dashboard" },
+      { icon: FileText, label: "Contratos", href: "/dashboard/contratos" },
+      { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
     ]
   }
 ];
@@ -120,6 +87,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     const fetchData = async () => {
+      // Fetch details from localStorage if in bypass/demo mode
+      const localName = typeof window !== "undefined" ? localStorage.getItem("userName") : null;
+      const signedContractStr = typeof window !== "undefined" ? localStorage.getItem("signedContract") : null;
+      let initialName = "Agente G8Pay";
+      let initialEmail = "agente@g8pay.com";
+      let initialCpf = "000.000.000-00";
+
+      if (localName) {
+        initialName = localName;
+      }
+      if (signedContractStr) {
+        try {
+          const contract = JSON.parse(signedContractStr);
+          if (contract.fullName) initialName = contract.fullName;
+          if (contract.email) initialEmail = contract.email;
+          if (contract.cpf) initialCpf = contract.cpf;
+        } catch (err) {}
+      }
+
+      setUserName(initialName);
+      setAccountInfo({
+        agency: "0001",
+        account: "12345-6"
+      });
+
+      setUser({
+        name: initialName,
+        nome: initialName,
+        email: initialEmail,
+        taxNumber: initialCpf,
+        status: "CONTA_APROVADA",
+        accountBranch: "0001",
+        accountNumber: "12345-6",
+        bankNumber: "389"
+      });
+
       try {
         const userRes = await api.get("/api/users/data");
 
@@ -160,6 +163,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setGlobalBalanceLoading(false);
       } catch (err) {
         console.error("Error updating balance:", err);
+        setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
+        setGlobalBalance(0);
         setIsLoadingData(false);
         setGlobalBalanceLoading(false);
       }
@@ -425,7 +430,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="mt-auto relative z-10 pt-6 border-t border-white/5">
           <button onClick={handleLogout} className="flex items-center gap-5 px-5 py-4 w-full text-white/60 hover:bg-white hover:text-brand-accent rounded-md transition-all border border-transparent group">
             <LogOut className="h-5 w-5 text-white/60 group-hover:text-brand-accent" />
-            <span className="text-[11px] font-black uppercase tracking-widest text-white/60 group-hover:text-brand-accent">Encerrar Sessão</span>
+            <span className="text-[11px] font-black uppercase tracking-widest text-white/60 group-hover:text-brand-accent">Sair</span>
           </button>
         </div>
       </aside>
@@ -434,22 +439,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {/* Top Header */}
         <header className={`h-24 flex items-center justify-between px-10 z-10 shrink-0 ${headerBg}`}>
-          <div className="flex items-center max-w-[280px] xl:max-w-sm w-full">
-            <div className="relative w-full group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 group-focus-within:text-brand-accent transition-colors" />
-              <Input 
-                placeholder="Pesquisar transações..." 
-                className="w-full bg-white/[0.08] border-white/5 pl-12 focus:bg-white/[0.12] focus:border-brand-accent/60 rounded-md h-12 transition-all font-black placeholder:text-white/30 text-white text-sm" 
-              />
-            </div>
-          </div>
+          <div />
 
           <div className="flex items-center gap-8 xl:gap-12">
             {/* Balance Section */}
             <div className={`flex flex-col items-end justify-center h-12 border-r pr-8 xl:pr-12 ${
               currentBrand.id !== "g8" ? "border-white/5" : "border-white/10"
             }`}>
-              <span className="text-[10px] text-white/60 font-black uppercase tracking-[0.2em] mb-2 leading-none">Saldo Líquido</span>
+              <span className="text-[10px] text-white/60 font-black uppercase tracking-[0.2em] mb-2 leading-none">Comissões</span>
               <div className="flex items-center gap-4">
                 {isLoadingData ? (
                   <div className="h-6 w-32 bg-white/5 animate-pulse rounded-md" />

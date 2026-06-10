@@ -138,7 +138,48 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const handleIdentifierSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier) return;
-    setStep("virtual");
+
+    // Check if we have onboarding data to pull name from
+    const signedContractStr = typeof window !== "undefined" ? localStorage.getItem("signedContract") : null;
+    let nameToStore = "Agente G8Pay";
+    let emailToStore = "agente@g8pay.com";
+
+    if (signedContractStr) {
+      try {
+        const contract = JSON.parse(signedContractStr);
+        if (contract.fullName) {
+          nameToStore = contract.fullName;
+        }
+        if (contract.email) {
+          emailToStore = contract.email;
+        }
+      } catch (err) {}
+    } else {
+      // Fallback: derive name from email or identifier input
+      const cleanInput = identifier.trim();
+      if (cleanInput.includes("@")) {
+        const localPart = cleanInput.split("@")[0];
+        nameToStore = localPart.charAt(0).toUpperCase() + localPart.slice(1);
+        emailToStore = cleanInput;
+      } else {
+        nameToStore = "Agente G8Pay";
+      }
+    }
+
+    // Store mock authentication tokens
+    localStorage.setItem("token", "bypass-token");
+    localStorage.setItem("userToken", "bypass-user-token");
+    localStorage.setItem("userName", nameToStore);
+    
+    // Set session expiration to 15 mins from now
+    localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
+
+    toast.success(`Bem-vindo, ${nameToStore}! Redirecionando...`);
+
+    // Redirect to dashboard with a short delay for visual feedback
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 800);
   };
 
   const submitFinalLogin = async (token: string) => {
