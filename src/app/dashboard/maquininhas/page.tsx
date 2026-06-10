@@ -454,15 +454,15 @@ export default function MaquininhasPage() {
 
       <div className="flex-1 space-y-12 relative z-10">
         {/* Header */}
-        <div className="space-y-4">
-          <Badge variant="secondary" className="bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] border-0 px-3 py-1 font-black text-[10px] uppercase tracking-[0.2em]">
-            Adquirência {currentBrand.id === "g8" ? "G8" : "Galapagos"}
+        <div className="space-y-3 px-2">
+          <Badge variant="secondary" className="bg-orange-500/10 text-brand-accent border-0 px-4 py-1.5 font-black text-[11px] uppercase tracking-[0.2em] rounded-sm">
+            Credenciamento
           </Badge>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tighter text-[#0c0a09] leading-none uppercase">
-            Maquininhas <span className="text-orange-600">{currentBrand.id === "g8" ? "G8 Pay" : currentBrand.name}</span>
+          <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-[#0c0a09]">
+            Cadastro de <span className="text-brand-accent">Estabelecimento</span>
           </h1>
-          <p className="text-sm md:text-base text-neutral-700 font-bold max-w-2xl">
-            Solicite sua maquininha e comece a receber pagamentos com as melhores taxas do mercado.
+          <p className="text-sm md:text-base text-neutral-400 font-bold opacity-75">
+            Credencie novos estabelecimentos comerciais para as maquininhas G8Pay.
           </p>
         </div>
 
