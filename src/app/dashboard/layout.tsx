@@ -23,7 +23,10 @@ import {
   Shield,
   Car,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  UserPlus,
+  Store,
+  FolderOpen
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,7 +55,16 @@ const menuGroups: { label?: string; items: MenuItem[] }[] = [
   {
     items: [
       { icon: Home, label: "Início", href: "/dashboard" },
+      { 
+        icon: UserPlus, 
+        label: "Cadastro", 
+        href: "#",
+        submenu: [
+          { icon: Store, label: "E.C - Estabelecimento Comercial", href: "/dashboard/maquininhas" }
+        ]
+      },
       { icon: FileText, label: "Contratos", href: "/dashboard/contratos" },
+      { icon: FolderOpen, label: "Documentos", href: "/dashboard/documentos" },
       { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
     ]
   }

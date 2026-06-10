@@ -44,7 +44,7 @@ export default function ContratosPage() {
             Gestão de Documentos
           </Badge>
           <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-[#0c0a09]">
-            Seus Contratos
+            Seus <span className="text-brand-accent">Contratos</span>
           </h1>
           <p className="text-sm md:text-base text-neutral-400 font-bold opacity-75">
             Visualize e baixe seus termos de adesão e contratos comerciais com a G8Pay.

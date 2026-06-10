@@ -84,8 +84,8 @@ const modelos: MaquininhaModel[] = [
 type FormStep = "select" | "form" | "documents" | "confirm" | "success";
 
 export default function MaquininhasPage() {
-  const [step, setStep] = useState<FormStep>("select");
-  const [selectedModel, setSelectedModel] = useState<MaquininhaModel | null>(null);
+  const [step, setStep] = useState<FormStep>("form");
+  const [selectedModel, setSelectedModel] = useState<MaquininhaModel | null>(modelos[1]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Document State
@@ -413,8 +413,8 @@ export default function MaquininhasPage() {
   };
 
   const handleReset = () => {
-    setStep("select");
-    setSelectedModel(null);
+    setStep("form");
+    setSelectedModel(modelos[1]);
     setFormData({
       tipoEstabelecimento: "",
       cnpjCpf: "",
@@ -609,33 +609,7 @@ export default function MaquininhasPage() {
         {/* Step: Form */}
         {step === "form" && selectedModel && (
           <div className="max-w-7xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            {/* Selected model summary */}
-            <div className="flex items-center gap-6 p-6 bg-white border-2 border-[var(--brand-accent)]/20 rounded-sm shadow-md">
-              <div className={`w-14 h-14 bg-gradient-to-br ${
-                currentBrand.id === "galapagos"
-                  ? selectedModel.id === "g8-pro"
-                    ? "from-[#0b1329] to-[#1e3a8a]"
-                    : selectedModel.id === "g8-smart"
-                    ? "from-[#0b1329] to-[#111c3a]"
-                    : "from-[#0a0f1d] to-[#0f172a]"
-                  : selectedModel.color
-              } rounded-sm flex items-center justify-center shrink-0`}>
-                <selectedModel.icon className="h-7 w-7 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black text-[var(--brand-accent)] uppercase tracking-widest">Modelo selecionado</p>
-                <div className="flex items-center gap-3">
-                  <p className="text-lg font-black text-[#0c0a09] uppercase tracking-tight">{selectedModel.name}</p>
-                  <Badge className="bg-[var(--brand-accent)]/10 text-[var(--brand-accent)] border-0 text-[10px] font-black uppercase tracking-widest">{selectedModel.revenueLabel}</Badge>
-                </div>
-              </div>
-              <button
-                onClick={() => setStep("select")}
-                className="text-[10px] font-black text-[var(--brand-accent)] uppercase tracking-widest shrink-0 px-4 py-2 border-2 border-[var(--brand-accent)]/30 rounded-sm hover:bg-[var(--brand-accent)]/10 transition-all"
-              >
-                Alterar modelo
-              </button>
-            </div>
+            {/* Selected model summary hidden for direct merchant registration */}
 
             {/* Form Sections */}
             <div className="space-y-12">

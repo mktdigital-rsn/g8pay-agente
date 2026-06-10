@@ -110,6 +110,19 @@ export default function ContaPage() {
 
   return (
     <div className="p-4 md:p-10 space-y-10 animate-in fade-in duration-700 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="space-y-3 px-2">
+        <Badge variant="secondary" className="bg-orange-500/10 text-brand-accent border-0 px-4 py-1.5 font-black text-[11px] uppercase tracking-[0.2em] rounded-sm">
+          Configurações
+        </Badge>
+        <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-[#0c0a09]">
+          Meu <span className="text-brand-accent">Perfil</span>
+        </h1>
+        <p className="text-sm md:text-base text-neutral-400 font-bold opacity-75">
+          Gerencie suas informações cadastrais e dados de acesso.
+        </p>
+      </div>
+
       {/* Profile Header */}
       <div className="relative group overflow-hidden bg-white border border-neutral-100 rounded-sm p-8 md:p-12 shadow-2xl flex flex-col md:flex-row items-center gap-10">
         <div className="absolute top-0 right-0 w-80 h-80 bg-primary/5 rounded-full blur-[100px] -mr-40 -mt-40 transition-transform group-hover:scale-125 duration-1000" />
