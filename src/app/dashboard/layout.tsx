@@ -197,6 +197,78 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push("/");
   }, [router, setTemporaryDeviceId]);
 
+  const [timeLeft, setTimeLeft] = React.useState<number | null>(null);
+
+  // Monitor user activity to reset session timer
+  React.useEffect(() => {
+    const EVENTS = ["mousemove", "mousedown", "keypress", "scroll", "touchstart"];
+    let lastActivity = Date.now();
+
+    const handleActivity = () => {
+      const now = Date.now();
+      // Throttle localStorage writes to once every 2 seconds
+      if (now - lastActivity > 2000) {
+        lastActivity = now;
+        const expiresAt = now + 600 * 1000;
+        localStorage.setItem("sessionExpiresAt", expiresAt.toString());
+        setTimeLeft(600);
+      }
+    };
+
+    EVENTS.forEach(event => window.addEventListener(event, handleActivity));
+
+    return () => {
+      EVENTS.forEach(event => window.removeEventListener(event, handleActivity));
+    };
+  }, []);
+
+  // Initial load and sync of expiration
+  React.useEffect(() => {
+    const expiresAt = localStorage.getItem("sessionExpiresAt");
+    if (expiresAt) {
+      const remaining = Math.floor((parseInt(expiresAt) - Date.now()) / 1000);
+      if (remaining <= 0) {
+        toast.error("Sua sessão expirou por inatividade. Por favor, faça login novamente.");
+        handleLogout();
+      } else {
+        setTimeLeft(remaining);
+      }
+    } else {
+      const expires = Date.now() + 600 * 1000;
+      localStorage.setItem("sessionExpiresAt", expires.toString());
+      setTimeLeft(600);
+    }
+  }, [handleLogout]);
+
+  // Countdown timer interval
+  React.useEffect(() => {
+    if (timeLeft === null) return;
+
+    if (timeLeft <= 0) {
+      toast.error("Sua sessão expirou por inatividade. Por favor, faça login novamente.");
+      handleLogout();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev === null || prev <= 0) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timeLeft, handleLogout]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const THEME_BG = 
     currentBrand.id === "fiscomoney"
       ? "bg-[#1c1f22]"
@@ -460,6 +532,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Profile Section */}
             <div className="flex items-center gap-3 sm:gap-6 xl:gap-8 relative">
+              {timeLeft !== null && (
+                <div className={`hidden lg:flex flex-col items-center gap-1.5 px-4 py-2 rounded-md shadow-lg ${
+                  currentBrand.id !== "g8"
+                    ? "bg-white/10 border border-white/20"
+                    : "bg-brand-secondary/10 border border-brand-secondary/20"
+                }`}>
+                   <div className="flex items-center gap-2">
+                      <Clock className={`h-3 w-3 animate-pulse ${
+                        currentBrand.id !== "g8" ? "text-white" : "text-brand-secondary"
+                      }`} />
+                      <span className={`text-[9px] font-black uppercase tracking-widest ${
+                        currentBrand.id !== "g8" ? "text-white" : "text-brand-secondary"
+                      }`}>Sessão Segura</span>
+                   </div>
+                   <span className="text-sm font-mono font-black text-white tabular-nums leading-none">
+                     {formatTime(timeLeft)}
+                   </span>
+                </div>
+              )}
+
               <Link href="/dashboard/conta" className="flex items-center gap-4 cursor-pointer group">
                 <div className="text-right flex flex-col justify-center hidden sm:flex">
                   <p className="text-base font-black text-white group-hover:text-brand-accent transition-colors leading-none truncate max-w-[200px] xl:max-w-[300px]">

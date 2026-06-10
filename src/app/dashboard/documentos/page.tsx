@@ -24,6 +24,7 @@ type DocumentItem = {
   description: string;
   format: "PDF" | "DOCX" | "XLSX";
   size: string;
+  downloadUrl?: string;
 };
 
 export default function DocumentosPage() {
@@ -32,6 +33,14 @@ export default function DocumentosPage() {
 
   const documentos: DocumentItem[] = [
     // Abertura de Contas
+    {
+      title: "Relação de Documentos G8Pay - V1.4",
+      category: "abertura",
+      description: "Lista de documentos obrigatórios para credenciamento e abertura de conta G8Pay.",
+      format: "PDF",
+      size: "162 KB",
+      downloadUrl: "/documentos/RELAÇÃO DE DOCUMENTOS G8PAY - V1.4 29052026.pdf"
+    },
     {
       title: "Ficha Cadastral de Abertura de Conta - E.C",
       category: "abertura",
@@ -261,7 +270,13 @@ export default function DocumentosPage() {
                     Disponível Offline
                   </span>
                   <Button
-                    onClick={() => toast.success(`Iniciando download de: ${doc.title}`)}
+                    onClick={() => {
+                      if (doc.downloadUrl) {
+                        window.open(doc.downloadUrl, "_blank");
+                      } else {
+                        toast.success(`Iniciando download de: ${doc.title}`);
+                      }
+                    }}
                     className="h-10 px-5 font-black text-xs uppercase tracking-widest bg-black hover:bg-brand-accent text-white rounded-sm transition-all whitespace-nowrap shrink-0 shadow-sm shadow-black/10"
                   >
                     <Download className="h-4 w-4 mr-2" />
