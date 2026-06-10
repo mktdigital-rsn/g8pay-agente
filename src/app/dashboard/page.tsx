@@ -63,7 +63,7 @@ export default function DashboardHome() {
 
   return (
     <div className="bg-[#f8f9fa] min-h-screen w-full overflow-y-auto overflow-x-hidden no-scrollbar">
-      <div className="p-4 md:p-10 2xl:p-16 flex flex-col gap-10 max-w-[1800px] mx-auto animate-in fade-in duration-700">
+      <div className="p-2 sm:p-4 md:p-10 2xl:p-16 flex flex-col gap-6 md:gap-10 max-w-[1800px] mx-auto animate-in fade-in duration-700">
         
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 px-2">

@@ -109,7 +109,7 @@ export default function ContaPage() {
   };
 
   return (
-    <div className="p-4 md:p-10 space-y-10 animate-in fade-in duration-700 max-w-7xl mx-auto">
+    <div className="p-2 sm:p-4 md:p-10 space-y-6 md:space-y-10 animate-in fade-in duration-700 max-w-7xl mx-auto">
       {/* Header */}
       <div className="space-y-3 px-2">
         <Badge variant="secondary" className="bg-orange-500/10 text-brand-accent border-0 px-4 py-1.5 font-black text-[11px] uppercase tracking-[0.2em] rounded-sm">

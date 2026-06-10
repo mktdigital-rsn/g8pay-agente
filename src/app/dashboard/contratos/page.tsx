@@ -36,7 +36,7 @@ export default function ContratosPage() {
 
   return (
     <div className="bg-[#f8f9fa] min-h-screen w-full overflow-y-auto overflow-x-hidden no-scrollbar">
-      <div className="p-4 md:p-10 2xl:p-16 flex flex-col gap-10 max-w-[1800px] mx-auto animate-in fade-in duration-700">
+      <div className="p-2 sm:p-4 md:p-10 2xl:p-16 flex flex-col gap-6 md:gap-10 max-w-[1800px] mx-auto animate-in fade-in duration-700">
         
         {/* Header */}
         <div className="space-y-3 px-2">
@@ -196,7 +196,7 @@ export default function ContratosPage() {
       {contract && (
         <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
           <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-[#18181b] border-white/10 text-white flex flex-col p-6 rounded-sm">
-            <DialogHeader className="border-b border-white/5 pb-4 flex flex-row items-center justify-between shrink-0">
+            <DialogHeader className="border-b border-white/5 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
               <div>
                 <DialogTitle className="text-xl font-black text-white tracking-tight">Termo de Adesão - Agente G8Pay</DialogTitle>
                 <p className="text-xs text-neutral-400 font-bold mt-1 uppercase tracking-widest">
@@ -205,7 +205,7 @@ export default function ContratosPage() {
               </div>
               <Button
                 onClick={() => window.open(contract.pdfPreviewUrl || contract.signatureLink, "_blank")}
-                className="h-10 px-4 font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm mr-8"
+                className="h-10 px-4 font-black text-xs uppercase tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white rounded-sm"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Baixar

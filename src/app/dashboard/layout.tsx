@@ -26,7 +26,9 @@ import {
   ChevronUp,
   UserPlus,
   Store,
-  FolderOpen
+  FolderOpen,
+  Menu,
+  X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -79,6 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const [accountInfo, setAccountInfo] = React.useState({ agency: "", account: "" });
    const [isLoadingData, setIsLoadingData] = React.useState(true);
    const [expandedMenus, setExpandedMenus] = React.useState<Record<string, boolean>>({});
+   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
    React.useEffect(() => {
      menuGroups.forEach(group => {
@@ -188,65 +191,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return name.replace(/^\d+(\.\d+)*\s*/, '').split(' ')[0] || "Cliente";
   };
 
-  const SESSION_DURATION = 900; // 15 minutes in seconds
-  const [timeLeft, setTimeLeft] = React.useState<number | null>(null);
-
   const handleLogout = React.useCallback(() => {
     setTemporaryDeviceId("");
     localStorage.clear();
     router.push("/");
   }, [router, setTemporaryDeviceId]);
-
-  const refreshSession = React.useCallback(() => {
-    const expiresAt = Date.now() + SESSION_DURATION * 1000;
-    localStorage.setItem("sessionExpiresAt", expiresAt.toString());
-    setTimeLeft(SESSION_DURATION);
-  }, []);
-
-  // Initial load and sync
-  React.useEffect(() => {
-    const expiresAt = localStorage.getItem("sessionExpiresAt");
-    if (expiresAt) {
-      const remaining = Math.floor((parseInt(expiresAt) - Date.now()) / 1000);
-      if (remaining <= 0) {
-        toast.error("Sua sessão expirou por inatividade. Por favor, faça login novamente.");
-        handleLogout();
-      } else {
-        setTimeLeft(remaining);
-      }
-    } else {
-      refreshSession();
-    }
-  }, [handleLogout, refreshSession]);
-
-  // Countdown logic
-  React.useEffect(() => {
-    if (timeLeft === null) return;
-    
-    if (timeLeft <= 0) {
-      toast.error("Sua sessão expirou. Para sua segurança, você foi desconectado.");
-      handleLogout();
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev === null || prev <= 0) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(interval);
-  }, [timeLeft, handleLogout]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const THEME_BG = 
     currentBrand.id === "fiscomoney"
@@ -271,42 +220,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       ? "bg-[#0f0f0f] border-b border-white/5"
       : THEME_BG;
 
-  return (
-    <div className={`flex h-screen ${THEME_BG} text-white overflow-hidden font-sans ${currentBrand.themeClass}`}>
-      {/* Sidebar */}
-      <aside className={`w-72 2xl:w-80 flex flex-col p-6 2xl:p-10 space-y-8 z-20 relative ${sidebarBg} shrink-0`}>
+  const renderSidebarContent = (onLinkClick?: () => void) => {
+    return (
+      <>
         <div className="px-2 relative z-10">
-          {currentBrand.id === "g8" ? (
-            <Image src={currentBrand.logoOfficial} alt={currentBrand.name} width={180} height={60} className="object-contain 2xl:scale-110" />
-          ) : (
-            <div className={`flex items-center gap-3.5 select-none animate-in fade-in duration-300 origin-left ${
-              currentBrand.id === "advogado10x"
-                ? "scale-[1.05] 2xl:scale-[1.15] -translate-x-1"
-                : "scale-125 2xl:scale-[1.4]"
-            }`}>
-              <img 
-                src={currentBrand.logoOfficial} 
-                alt={currentBrand.name} 
-                className={`${
-                  currentBrand.id === "galapagos" 
-                    ? "h-9" 
-                    : currentBrand.id === "advogado10x"
-                    ? "h-14"
-                    : "h-14"
-                } w-auto object-contain brightness-100`} 
-              />
-              {currentBrand.id === "galapagos" && (
-                <div className="flex flex-col justify-center text-left">
-                  <span className="text-[17px] font-semibold tracking-wide leading-none text-white font-sans">
-                    {currentBrand.name.split(" ")[0]}
-                  </span>
-                  <span className="text-[8px] font-black tracking-[0.38em] uppercase text-white mt-1 leading-none">
-                    {(currentBrand.name.split(" ")[1] || "Capital").toUpperCase()}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+          <Link href="/dashboard" onClick={onLinkClick}>
+            {currentBrand.id === "g8" ? (
+              <Image src={currentBrand.logoOfficial} alt={currentBrand.name} width={180} height={60} className="object-contain 2xl:scale-110" />
+            ) : (
+              <div className={`flex items-center gap-3.5 select-none animate-in fade-in duration-300 origin-left ${
+                currentBrand.id === "advogado10x"
+                  ? "scale-[1.05] 2xl:scale-[1.15] -translate-x-1"
+                  : "scale-125 2xl:scale-[1.4]"
+              }`}>
+                <img 
+                  src={currentBrand.logoOfficial} 
+                  alt={currentBrand.name} 
+                  className={`${
+                    currentBrand.id === "galapagos" 
+                      ? "h-9" 
+                      : currentBrand.id === "advogado10x"
+                      ? "h-14"
+                      : "h-14"
+                  } w-auto object-contain brightness-100`} 
+                />
+                {currentBrand.id === "galapagos" && (
+                  <div className="flex flex-col justify-center text-left">
+                    <span className="text-[17px] font-semibold tracking-wide leading-none text-white font-sans">
+                      {currentBrand.name.split(" ")[0]}
+                    </span>
+                    <span className="text-[8px] font-black tracking-[0.38em] uppercase text-white mt-1 leading-none">
+                      {(currentBrand.name.split(" ")[1] || "Capital").toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </Link>
         </div>
 
         <div className="flex flex-col space-y-5 relative z-10 flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
@@ -388,6 +338,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <Link
                                   key={sub.label}
                                   href={sub.href}
+                                  onClick={onLinkClick}
                                   className={`flex items-center gap-4 px-6 py-2.5 rounded-md transition-all group border border-transparent ${
                                     isSubActive
                                       ? currentBrand.id !== "g8"
@@ -411,7 +362,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.label}
                       href={item.disabled ? "#" : item.href}
-                      onClick={(e) => item.disabled && e.preventDefault()}
+                      onClick={(e) => {
+                        if (item.disabled) {
+                          e.preventDefault();
+                        } else if (onLinkClick) {
+                          onLinkClick();
+                        }
+                      }}
                       className={`flex items-center gap-5 px-6 py-3 rounded-md transition-all group relative overflow-hidden border border-transparent ${isActive
                         ? currentBrand.id !== "g8"
                           ? "text-brand-accent bg-white shadow-lg shadow-black/10"
@@ -445,17 +402,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="text-[11px] font-black uppercase tracking-widest text-white/60 group-hover:text-brand-accent">Sair</span>
           </button>
         </div>
+      </>
+    );
+  };
+
+  return (
+    <div className={`flex h-screen ${THEME_BG} text-white overflow-hidden font-sans ${currentBrand.themeClass}`}>
+      {/* Desktop Sidebar */}
+      <aside className={`hidden lg:flex w-72 2xl:w-80 flex flex-col p-6 2xl:p-10 space-y-8 z-20 relative ${sidebarBg} shrink-0`}>
+        {renderSidebarContent()}
       </aside>
+
+      {/* Mobile Drawer (Sidebar) */}
+      <div className={`fixed inset-0 z-50 flex lg:hidden transition-opacity duration-300 ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        {/* Backdrop */}
+        <div onClick={() => setIsMobileMenuOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" />
+        
+        {/* Drawer Body */}
+        <aside className={`relative w-72 max-w-[85vw] flex flex-col p-6 space-y-6 z-10 transition-transform duration-300 ease-out ${sidebarBg} ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <button onClick={() => setIsMobileMenuOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full text-white transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+          
+          {renderSidebarContent(() => setIsMobileMenuOpen(false))}
+        </aside>
+      </div>
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative overflow-hidden">
         {/* Top Header */}
-        <header className={`h-24 flex items-center justify-between px-10 z-10 shrink-0 ${headerBg}`}>
-          <div />
+        <header className={`h-20 lg:h-24 flex items-center justify-between px-4 md:px-10 z-10 shrink-0 ${headerBg}`}>
+          <button 
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="lg:hidden p-2 hover:bg-white/10 rounded-md text-white transition-colors"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <div className="hidden lg:block" />
 
-          <div className="flex items-center gap-8 xl:gap-12">
+          <div className="flex items-center gap-3 sm:gap-8 xl:gap-12">
             {/* Balance Section */}
-            <div className={`flex flex-col items-end justify-center h-12 border-r pr-8 xl:pr-12 ${
+            <div className={`flex flex-col items-end justify-center h-12 border-r pr-4 sm:pr-8 xl:pr-12 ${
               currentBrand.id !== "g8" ? "border-white/5" : "border-white/10"
             }`}>
               <span className="text-[10px] text-white/60 font-black uppercase tracking-[0.2em] mb-2 leading-none">Comissões</span>
@@ -463,7 +450,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {isLoadingData ? (
                   <div className="h-6 w-32 bg-white/5 animate-pulse rounded-md" />
                 ) : (
-                  <span className="text-2xl xl:text-3xl font-black text-white font-mono tracking-tighter">{balance}</span>
+                  <span className="text-lg sm:text-2xl xl:text-3xl font-black text-white font-mono tracking-tighter">{balance}</span>
                 )}
                 <button onClick={() => window.location.reload()} className="group/sync">
                    <RotateCw className="h-4 w-4 text-brand-accent group-hover/sync:rotate-180 transition-transform duration-700" />
@@ -472,25 +459,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Profile Section */}
-            <div className="flex items-center gap-6 xl:gap-8 relative">
-              <div className={`hidden lg:flex flex-col items-center gap-1.5 px-4 py-2 rounded-md shadow-lg ${
-                currentBrand.id !== "g8"
-                  ? "bg-white/10 border border-white/20"
-                  : "bg-brand-secondary/10 border border-brand-secondary/20"
-              }`}>
-                 <div className="flex items-center gap-2">
-                    <Clock className={`h-3 w-3 animate-pulse ${
-                      currentBrand.id !== "g8" ? "text-white" : "text-brand-secondary"
-                    }`} />
-                    <span className={`text-[9px] font-black uppercase tracking-widest ${
-                      currentBrand.id !== "g8" ? "text-white" : "text-brand-secondary"
-                    }`}>Sessão Segura</span>
-                 </div>
-                 <span className="text-sm font-mono font-black text-white tabular-nums leading-none">
-                   {timeLeft !== null ? formatTime(timeLeft) : "00:00"}
-                 </span>
-              </div>
-
+            <div className="flex items-center gap-3 sm:gap-6 xl:gap-8 relative">
               <Link href="/dashboard/conta" className="flex items-center gap-4 cursor-pointer group">
                 <div className="text-right flex flex-col justify-center hidden sm:flex">
                   <p className="text-base font-black text-white group-hover:text-brand-accent transition-colors leading-none truncate max-w-[200px] xl:max-w-[300px]">
@@ -510,7 +479,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-10 bg-white relative shadow-inner no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-10 bg-white relative shadow-inner no-scrollbar">
           <div className="max-w-[1920px] mx-auto min-h-full">
             {children}
           </div>

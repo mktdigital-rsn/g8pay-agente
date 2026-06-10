@@ -449,7 +449,7 @@ export default function MaquininhasPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 xl:p-12 flex flex-col gap-8 h-full overflow-y-auto w-full no-scrollbar bg-[#f8f9fa] relative maquininhas-container">
+    <div className="p-2 sm:p-4 md:p-8 xl:p-12 flex flex-col gap-6 md:gap-8 h-full overflow-y-auto w-full no-scrollbar bg-[#f8f9fa] relative maquininhas-container">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--brand-accent)]/5 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />
 
       <div className="flex-1 space-y-12 relative z-10">
