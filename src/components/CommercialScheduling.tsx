@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 interface CommercialSchedulingProps {
   onBack: () => void;
@@ -95,12 +96,22 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
   // Mask functions
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
-    const masked = raw
-      .replace(/\D/g, "")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .slice(0, 14);
+    const v = raw.replace(/\D/g, "");
+    let masked = "";
+    if (v.length <= 11) {
+      masked = v
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+        .slice(0, 14);
+    } else {
+      masked = v
+        .replace(/(\d{2})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1/$2")
+        .replace(/(\d{4})(\d{1,2})/, "$1-$2")
+        .slice(0, 18);
+    }
     setFormData((prev) => ({ ...prev, cpf: masked }));
   };
 
@@ -163,9 +174,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
         newErrors.fullName = "Nome completo é obrigatório.";
       }
       if (!formData.cpf) {
-        newErrors.cpf = "CPF é obrigatório.";
-      } else if (formData.cpf.length < 14) {
-        newErrors.cpf = "CPF inválido.";
+        newErrors.cpf = "CPF ou CNPJ é obrigatório.";
+      } else {
+        const cleanVal = formData.cpf.replace(/\D/g, "");
+        if (cleanVal.length !== 11 && cleanVal.length !== 14) {
+          newErrors.cpf = "Documento (CPF ou CNPJ) inválido.";
+        }
       }
       if (!formData.birthDate) {
         newErrors.birthDate = "Data de nascimento é obrigatória.";
@@ -238,18 +252,44 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
 
   const handleScheduleSubmit = async () => {
     setLoading(true);
-    // Simulate saving commercial lead data
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setLoading(false);
+    try {
+      const payload = {
+        fullName: formData.fullName,
+        cpf: formData.cpf,
+        birthDate: formData.birthDate,
+        email: formData.email,
+        whatsapp: formData.whatsapp,
+        cep: formData.cep,
+        street: formData.street,
+        number: formData.number,
+        complement: formData.complement,
+        neighborhood: formData.neighborhood,
+        city: formData.city,
+        state: formData.state,
+        selectedDate: formData.selectedDate || null,
+        selectedTime: formData.selectedTime || null
+      };
 
-    // Redirect or open Google Calendar schedule URL in new tab ONLY if not embedded
-    if (!isEmbeddable) {
-      const calendarUrl = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/calendar/appointments/schedules/AcZssZ3d5Hw6Wd_Wf0J9c5bLqQ4X9M1P4s8xR-9kY5w=";
-      window.open(calendarUrl, "_blank");
+      const response = await api.post("/api/appointments", payload);
+      if (!response.data || !response.data.success) {
+        throw new Error(response.data?.error || "Erro ao salvar agendamento.");
+      }
+      
+      setLoading(false);
+      
+      // Redirect or open Google Calendar schedule URL in new tab ONLY if not embedded
+      if (!isEmbeddable) {
+        const calendarUrl = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/calendar/appointments/schedules/AcZssZ3d5Hw6Wd_Wf0J9c5bLqQ4X9M1P4s8xR-9kY5w=";
+        window.open(calendarUrl, "_blank");
+      }
+
+      setFinished(true);
+      toast.success(isEmbeddable ? "Agendamento concluído com sucesso!" : "Cadastro salvo! Agendamento aberto no Google Agenda.");
+    } catch (err: any) {
+      console.error("Error saving appointment:", err);
+      toast.error(err.response?.data?.error || err.message || "Erro ao salvar o agendamento no servidor.");
+      setLoading(false);
     }
-
-    setFinished(true);
-    toast.success(isEmbeddable ? "Agendamento concluído com sucesso!" : "Cadastro salvo! Agendamento aberto no Google Agenda.");
   };
 
   const formatDisplayDate = (dateString: string) => {
@@ -391,7 +431,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF / CNPJ</label>
                       <Input
                         id="cpf"
                         value={formData.cpf}
@@ -399,8 +439,8 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                           handleCpfChange(e);
                           if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
                         }}
-                        placeholder="000.000.000-00"
-                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                        placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all font-mono ${
                           errors.cpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
                         }`}
                       />

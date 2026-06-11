@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FolderOpen,
   FileText,
@@ -17,8 +17,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 type DocumentItem = {
+  id?: string;
   title: string;
   category: "abertura" | "manual" | "processo";
   description: string;
@@ -30,106 +32,25 @@ type DocumentItem = {
 export default function DocumentosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"todos" | "abertura" | "manual" | "processo">("todos");
+  const [documentos, setDocumentos] = useState<DocumentItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const documentos: DocumentItem[] = [
-    // Abertura de Contas
-    {
-      title: "Relação de Documentos G8Pay - V1.4",
-      category: "abertura",
-      description: "Lista de documentos obrigatórios para credenciamento e abertura de conta G8Pay.",
-      format: "PDF",
-      size: "162 KB",
-      downloadUrl: "/documentos/RELAÇÃO DE DOCUMENTOS G8PAY - V1.4 29052026.pdf"
-    },
-    {
-      title: "Ficha Cadastral de Abertura de Conta - E.C",
-      category: "abertura",
-      description: "Formulário impresso obrigatório para abertura manual de contas de estabelecimento comercial.",
-      format: "PDF",
-      size: "1.2 MB"
-    },
-    {
-      title: "Termo de Condições de Abertura de Conta Digital",
-      category: "abertura",
-      description: "Contrato padrão de abertura de conta corrente e serviços de pagamento.",
-      format: "PDF",
-      size: "1.8 MB"
-    },
-    {
-      title: "Declaração de Faturamento Mensal Estimado",
-      category: "abertura",
-      description: "Modelo de declaração de faturamento para empresas novas (sem histórico).",
-      format: "DOCX",
-      size: "450 KB"
-    },
-    {
-      title: "Autorização de Domicílio Bancário / Dossiê",
-      category: "abertura",
-      description: "Termo de autorização de travas de recebíveis e liquidação bancária.",
-      format: "PDF",
-      size: "950 KB"
-    },
-
-    // Manuais
-    {
-      title: "Manual de Abertura de Contas para Clientes",
-      category: "manual",
-      description: "Guia passo a passo completo ilustrado para auxiliar os clientes a abrirem suas contas via aplicativo.",
-      format: "PDF",
-      size: "4.2 MB"
-    },
-    {
-      title: "Manual do Agente Comercial G8Pay v2.0",
-      category: "manual",
-      description: "Manual operacional detalhado contendo regras de abordagem, taxas vigentes e uso do portal.",
-      format: "PDF",
-      size: "3.1 MB"
-    },
-    {
-      title: "Guia Rápido de Instalação de Maquininhas Pro/Ultra",
-      category: "manual",
-      description: "Instruções de ativação, conexão de chip/Wi-Fi e primeiro uso dos terminais de POS.",
-      format: "PDF",
-      size: "1.5 MB"
-    },
-    {
-      title: "Manual de Tratamento de Contestação de Vendas (Chargeback)",
-      category: "manual",
-      description: "Procedimento para envio de comprovantes e defesa de transações contestadas.",
-      format: "PDF",
-      size: "2.1 MB"
-    },
-
-    // Processos e Fluxogramas
-    {
-      title: "Fluxograma do Processo de Credenciamento de E.C",
-      category: "processo",
-      description: "Fluxograma sequencial mostrando as etapas desde a coleta de dados até a homologação final.",
-      format: "PDF",
-      size: "1.1 MB"
-    },
-    {
-      title: "Manual de Processos e Políticas de Prevenção à Fraude",
-      category: "processo",
-      description: "Procedimentos de KYC (Conheça seu Cliente) e análise de perfil transacional para agentes.",
-      format: "PDF",
-      size: "2.8 MB"
-    },
-    {
-      title: "Processo de Solicitação de Suporte e Assistência Técnica",
-      category: "processo",
-      description: "Manual de como abrir chamados de troca de bobina, manutenção de POS ou problemas de sinal.",
-      format: "PDF",
-      size: "980 KB"
-    },
-    {
-      title: "Regulamento e Política Comercial de Comissões G8Pay",
-      category: "processo",
-      description: "Regras de repasse, percentuais de comissionamento por volume transacionado e cronograma.",
-      format: "PDF",
-      size: "1.4 MB"
-    }
-  ];
+  useEffect(() => {
+    const fetchDocs = async () => {
+      try {
+        const response = await api.get("/api/documents");
+        if (response.data && response.data.success) {
+          setDocumentos(response.data.data);
+        }
+      } catch (err) {
+        console.error("Error fetching documents:", err);
+        toast.error("Não foi possível carregar os documentos do servidor.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDocs();
+  }, []);
 
   const getCategoryBadge = (category: string) => {
     switch (category) {
@@ -271,7 +192,9 @@ export default function DocumentosPage() {
                   </span>
                   <Button
                     onClick={() => {
-                      if (doc.downloadUrl) {
+                      if (doc.id) {
+                        window.open(`${api.defaults.baseURL}/api/documents/${doc.id}/download`, "_blank");
+                      } else if (doc.downloadUrl) {
                         window.open(doc.downloadUrl, "_blank");
                       } else {
                         toast.success(`Iniciando download de: ${doc.title}`);

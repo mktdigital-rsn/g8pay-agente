@@ -23,7 +23,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { currentBrand } from "@/config/brand";
 
-type LoginStep = "identifier" | "virtual" | "qrcode";
+type LoginStep = "identifier" | "password";
 type ChallengeStatus = "PENDING" | "APPROVED" | "EXPIRED";
 
 type ChallengeResponse = {
@@ -61,7 +61,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const [step, setStep] = useState<LoginStep>("identifier");
   const [identifier, setIdentifier] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [passwordKeys, setPasswordKeys] = useState<string[][]>([]);
+  const [password, setPassword] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
   const [challengeQrCode, setChallengeQrCode] = useState("");
   const [challengeStatus, setChallengeStatus] = useState<ChallengeStatus>("PENDING");
@@ -92,225 +92,101 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
     }
   }, [challengeStatus]);
 
-  const numberPairs = [
-    ["0", "1"],
-    ["2", "3"],
-    ["4", "5"],
-    ["6", "7"],
-    ["8", "9"],
-  ];
-
-  const shownPassword = useMemo(() => {
-    return passwordKeys.map(() => "●").join(" ");
-  }, [passwordKeys]);
-
   const cleanIdentifier = useMemo(() => {
     const isEmail = identifier.includes("@");
     return isEmail ? identifier.trim().toLowerCase() : identifier.replace(/\D/g, "");
   }, [identifier]);
 
-  const buildPassword = () => {
-    return passwordKeys.map((pair) => pair.join("")).join("");
-  };
-
-  const resetChallenge = () => {
-    if (pollingTimerRef.current) {
-      clearTimeout(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-    setChallengeToken("");
-    setChallengeQrCode("");
-    setChallengeStatus("PENDING");
-    setChallengeExpiresAt("");
-    setIsPolling(false);
-    setHasFinalized(false);
-  };
-
-  const addPasswordPair = (pair: string[]) => {
-    if (passwordKeys.length >= 10) return;
-    setPasswordKeys([...passwordKeys, pair]);
-  };
-
-  const removeLastPair = () => {
-    setPasswordKeys(passwordKeys.slice(0, -1));
-  };
-
   const handleIdentifierSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier) return;
-
-    // Check if we have onboarding data to pull name from
-    const signedContractStr = typeof window !== "undefined" ? localStorage.getItem("signedContract") : null;
-    let nameToStore = "Agente G8Pay";
-    let emailToStore = "agente@g8pay.com";
-
-    if (signedContractStr) {
-      try {
-        const contract = JSON.parse(signedContractStr);
-        if (contract.fullName) {
-          nameToStore = contract.fullName;
-        }
-        if (contract.email) {
-          emailToStore = contract.email;
-        }
-      } catch (err) {}
-    } else {
-      // Fallback: derive name from email or identifier input
-      const cleanInput = identifier.trim();
-      if (cleanInput.includes("@")) {
-        const localPart = cleanInput.split("@")[0];
-        nameToStore = localPart.charAt(0).toUpperCase() + localPart.slice(1);
-        emailToStore = cleanInput;
-      } else {
-        nameToStore = "Agente G8Pay";
-      }
-    }
-
-    // Store mock authentication tokens
-    localStorage.setItem("token", "bypass-token");
-    localStorage.setItem("userToken", "bypass-user-token");
-    localStorage.setItem("userName", nameToStore);
-    
-    // Set session expiration to 15 mins from now
-    localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
-
-    toast.success(`Bem-vindo, ${nameToStore}! Redirecionando...`);
-
-    // Redirect to dashboard with a short delay for visual feedback
-    setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 800);
+    setStep("password");
   };
 
-  const submitFinalLogin = async (token: string) => {
-    if (hasFinalized) return;
-    setHasFinalized(true);
+  const handleLoginSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!password) {
+      toast.error("Por favor, informe sua senha de acesso.");
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const payload = {
-        email: cleanIdentifier,
-        keys: passwordKeys,
-        deviceId: token,
+        cpf: cleanIdentifier,
+        password: password,
       };
 
-      const response = await api.post<LoginResponse>("/api/auth/login/teclado-virtual", payload);
+      const response = await api.post("/api/agents/login", payload);
 
-      if (response.status === 200) {
-        const { accessToken, userToken } = response.data;
-        if (accessToken) localStorage.setItem("token", accessToken);
-        if (userToken) localStorage.setItem("userToken", userToken);
+      if (response.data && response.data.success) {
+        const { accessToken, userToken, agent } = response.data;
+        
+        localStorage.setItem("token", accessToken || "bypass-token");
+        localStorage.setItem("userToken", userToken || "bypass-user-token");
+        localStorage.setItem("agentId", agent.id);
+        localStorage.setItem("userName", agent.fullName);
+        localStorage.setItem("userEmail", agent.email);
+        localStorage.setItem("userCpf", agent.cpf);
+        localStorage.setItem("userWhatsapp", agent.whatsapp);
 
-        toast.success("Autenticação confirmada! Redirecionando...");
-        // Delay redirect to let user see success progress (15 seconds)
-        await new Promise((resolve) => setTimeout(resolve, 15000));
-        window.location.href = "/dashboard";
+        // Try getting contract from API to update local signedContract
+        try {
+          const contractRes = await api.get(`/api/contracts?agentId=${agent.id}`);
+          if (contractRes.data && contractRes.data.success && contractRes.data.data.length > 0) {
+            const apiContract = contractRes.data.data[0];
+            const contractData = {
+              agentId: agent.id,
+              fullName: agent.fullName,
+              cpf: agent.cpf,
+              email: agent.email,
+              whatsapp: agent.whatsapp,
+              date: new Date(apiContract.createdAt).toLocaleDateString("pt-BR"),
+              pdfPreviewUrl: `${api.defaults.baseURL}/api/contracts/${apiContract.id}/download`,
+              signatureLink: apiContract.signatureLink,
+              isMock: !apiContract.signatureLink?.includes("d4sign")
+            };
+            localStorage.setItem("signedContract", JSON.stringify(contractData));
+          } else {
+            // Fallback metadata
+            const contractData = {
+              agentId: agent.id,
+              fullName: agent.fullName,
+              cpf: agent.cpf,
+              email: agent.email,
+              whatsapp: agent.whatsapp,
+              date: new Date().toLocaleDateString("pt-BR")
+            };
+            localStorage.setItem("signedContract", JSON.stringify(contractData));
+          }
+        } catch (cErr) {
+          console.warn("Could not load signed contract on login:", cErr);
+        }
+        
+        // Set session expiration to 15 mins from now
+        localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
+
+        toast.success(`Bem-vindo de volta, ${agent.fullName}! Redirecionando...`);
+
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 800);
       }
     } catch (err: any) {
+      console.error("Login error:", err);
       const message =
+        err.response?.data?.error ||
         err.response?.data?.message ||
-        err.response?.data?.mensagem ||
-        "Não foi possível concluir o acesso. Tente novamente.";
+        "Não foi possível realizar o login. CPF/CNPJ ou senha inválidos.";
       toast.error(message);
-      setHasFinalized(false);
-      setIsPolling(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const stopPolling = () => {
-    setIsPolling(false);
-    if (pollingTimerRef.current) {
-      clearTimeout(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-  };
-
-  const schedulePoll = (token: string) => {
-    if (pollingTimerRef.current) {
-      clearTimeout(pollingTimerRef.current);
-    }
-
-    pollingTimerRef.current = setTimeout(async () => {
-      const status = await pollChallengeStatus(token);
-      if (status === "PENDING") {
-        schedulePoll(token);
-      }
-    }, 2000);
-  };
-
-  const pollChallengeStatus = async (token: string) => {
-    try {
-      const response = await api.get<ChallengeStatusResponse>(
-        `/api/auth/login/teclado-virtual/challenge/${token}/status`
-      );
-
-      const nextStatus = response.data.data.status;
-      setChallengeStatus(nextStatus);
-      setChallengeExpiresAt(response.data.data.expiresAt);
-
-      if (nextStatus === "APPROVED") {
-        stopPolling();
-        await submitFinalLogin(token);
-        return;
-      }
-
-      if (nextStatus === "EXPIRED") {
-        stopPolling();
-        setIsLoading(false);
-        toast.error("O desafio expirou. Reinicie o acesso.");
-      }
-
-      return nextStatus;
-    } catch (err: any) {
-      const message = err.response?.data?.message || "Não foi possível verificar o desafio.";
-      toast.error(message);
-      stopPolling();
-      setIsLoading(false);
-      return null;
-    }
-  };
-
-  const handleLoginSubmit = async () => {
-    setIsLoading(true);
-    resetChallenge();
-
-    try {
-      if (passwordKeys.length === 0) throw new Error("Selecione sua senha");
-
-      const payload = {
-        email: cleanIdentifier,
-        password: buildPassword(),
-        keys: passwordKeys,
-      };
-
-      const response = await api.post<ChallengeResponse>("/api/auth/login/teclado-virtual/challenge", payload);
-
-      if (response.status === 200) {
-        const { token, qrcode, status, expiresAt } = response.data.data;
-        setTemporaryDeviceId(token);
-        setChallengeToken(token);
-        setChallengeQrCode(qrcode);
-        setChallengeStatus(status);
-        setChallengeExpiresAt(expiresAt);
-        setStep("qrcode");
-        setIsPolling(true);
-        schedulePoll(token);
-      }
-    } catch (err: any) {
-      const message =
-        err.response?.data?.message ||
-        err.response?.data?.mensagem ||
-        "Não foi possível gerar o desafio QR Code.";
-      toast.error(message);
-      setIsLoading(false);
-    }
-  };
-
   const handleRestartFlow = () => {
-    setPasswordKeys([]);
-    resetChallenge();
-    setTemporaryDeviceId("");
+    setPassword("");
     setStep("identifier");
     setIsLoading(false);
   };
@@ -485,9 +361,9 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
               </motion.div>
             )}
 
-            {step === "virtual" && (
+            {step === "password" && (
               <motion.div
-                key="step-virtual"
+                key="step-password"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
@@ -502,220 +378,43 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                     <ChevronLeft className="h-6 w-6 text-white/50" />
                   </button>
                   <div>
-                    <h2 className="text-2xl font-black text-white">Teclado Virtual</h2>
+                    <h2 className="text-2xl font-black text-white">Senha de Acesso</h2>
                     <p className="text-white/40 text-sm font-medium">{cleanIdentifier || "Identificação pendente"}</p>
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className={`h-16 flex items-center justify-center gap-3 bg-white/[0.07] rounded-[2px] border border-white/[0.12] font-mono text-2xl tracking-[0.5em] ${
-                    currentBrand.id === "galapagos" ? "text-white" : "text-primary"
-                  }`}>
-                    {shownPassword || <span className="text-white/20 text-[10px] uppercase font-black tracking-[0.3em]">Teclado Virtual</span>}
-                  </div>
-
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                    {numberPairs.map((pair, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => addPasswordPair(pair)}
-                        className={`h-14 border rounded-[2px] text-white font-black text-lg transition-all ${
-                          currentBrand.id === "galapagos"
-                            ? "bg-transparent hover:bg-[rgba(255,255,255,0.06)] border-white/10"
-                            : "bg-white/[0.10] hover:bg-brand-accent border-white/[0.14]"
-                        }`}
-                      >
-                        {pair[0]} ou {pair[1]}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={removeLastPair}
-                      className="h-14 bg-red-500 hover:bg-red-400 text-white font-black text-[14px] uppercase rounded-[2px] shadow-lg transition-all"
-                    >
-                      APAGAR
-                    </button>
+                <form onSubmit={handleLoginSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">Senha de Acesso</label>
+                    <Input
+                      type="password"
+                      placeholder="Digite sua senha de acesso"
+                      className="h-16 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold text-lg rounded-[2px]"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoFocus
+                    />
                   </div>
 
                   <Button
-                    onClick={handleLoginSubmit}
+                    type="submit"
                     className={`w-full h-16 text-lg font-black text-white rounded-[2px] shadow-lg cursor-pointer transition-all ${
                       currentBrand.id === "galapagos"
                         ? "bg-blue-500 hover:bg-blue-400"
                         : "bg-brand-accent hover:bg-brand-accent-hover"
                     }`}
-                    disabled={isLoading || passwordKeys.length === 0}
+                    disabled={isLoading || !password}
                   >
-                    {isLoading ? "Aguarde um instante" : "CONTINUAR"}
+                    {isLoading ? (
+                      <span className="flex items-center gap-2 justify-center w-full">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Aguarde um instante...
+                      </span>
+                    ) : (
+                      "ENTRAR E ACESSAR"
+                    )}
                   </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === "qrcode" && (
-              <motion.div
-                key="step-qr"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center justify-center space-y-10 2xl:space-y-16 text-center mt-12 lg:mt-0"
-              >
-                <AnimatePresence mode="wait">
-                  {challengeStatus === "APPROVED" ? (
-                    <motion.div
-                      key="approved-state"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      className="flex flex-col items-center space-y-8"
-                    >
-                      {/* Success pulse ring */}
-                      <div className="relative">
-                        <motion.div
-                          initial={{ scale: 0.5, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ duration: 0.6, ease: "easeOut" }}
-                          className="w-28 h-28 rounded-full bg-green-500/10 border-2 border-green-500/30 flex items-center justify-center"
-                        >
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ delay: 0.3, duration: 0.4, type: "spring", stiffness: 200 }}
-                          >
-                            <CheckCircle2 className="h-14 w-14 text-green-500" />
-                          </motion.div>
-                        </motion.div>
-                        <motion.div
-                          initial={{ scale: 0.8, opacity: 0.6 }}
-                          animate={{ scale: 1.6, opacity: 0 }}
-                          transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
-                          className="absolute inset-0 w-28 h-28 rounded-full border-2 border-green-500/40"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <motion.h2
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 }}
-                          className="text-2xl font-black text-white"
-                        >
-                          Autenticado com sucesso!
-                        </motion.h2>
-                        <motion.p
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.6 }}
-                          className="text-white/50 font-medium text-sm"
-                        >
-                          QR Code confirmado no aplicativo.
-                        </motion.p>
-                      </div>
-
-                      <div className="w-full max-w-sm space-y-4 pt-4 relative z-10">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className={`font-black uppercase tracking-widest animate-pulse text-left ${
-                            currentBrand.id === "galapagos" ? "text-amber-400" : "text-brand-accent"
-                          }`}>
-                            {progress < 30 ? "Estabelecendo conexão segura..." :
-                             progress < 60 ? "Autenticando criptografia..." :
-                             progress < 90 ? "Sincronizando dados..." :
-                             "Acesso liberado! Redirecionando..."}
-                          </span>
-                          <span className="font-mono font-black text-white text-base">
-                            {Math.round(progress)}%
-                          </span>
-                        </div>
-
-                        {/* Outer track */}
-                        <div className="w-full h-3 bg-neutral-900 rounded-full overflow-hidden border border-white/5 p-[2px]">
-                          {/* Inner glowing bar */}
-                          <div 
-                            className={`h-full rounded-full transition-all duration-100 ease-out ${
-                              currentBrand.id === "galapagos"
-                                ? "bg-gradient-to-r from-amber-400 to-yellow-500 shadow-[0_0_12px_#f59e0b]"
-                                : "bg-gradient-to-r from-brand-accent to-brand-secondary shadow-[0_0_12px_var(--brand-accent)]"
-                            }`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.8 }}
-                        className="flex items-center gap-3 bg-white/5 border border-white/10 px-6 py-4 rounded-xl shadow-2xl"
-                      >
-                        <Loader2 className={`h-4 w-4 animate-spin ${
-                          currentBrand.id === "galapagos" ? "text-amber-400" : "text-brand-accent"
-                        }`} />
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Carregando painel de controle...</span>
-                      </motion.div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="pending-state"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, scale: 0.9 }}
-                      transition={{ duration: 0.3 }}
-                      className="flex flex-col items-center space-y-10 2xl:space-y-16 w-full"
-                    >
-                      <div className="space-y-2">
-                        <h2 className="text-3xl font-black text-white">Aprovação no App</h2>
-                        <p className="text-white/40 font-medium">
-                          Escaneie o QR Code no aplicativo para concluir o login.
-                        </p>
-                      </div>
-
-                      <div className="p-6 bg-white rounded-[6px]">
-                        {challengeQrCode ? (
-                          <img src={challengeQrCode} alt="QR Code do desafio" className="h-[220px] w-[220px]" />
-                        ) : (
-                          <QRCodeSVG value={challengeToken} size={220} level="H" />
-                        )}
-                      </div>
-
-                      <div className={`w-full max-w-md space-y-3 rounded-[2px] p-5 text-left border transition-all ${
-                        currentBrand.id === "galapagos"
-                          ? "bg-amber-400/10 border-amber-400/20"
-                          : "bg-white/[0.05] border-white/10"
-                      }`}>
-                        <div className="flex items-center gap-3 text-white">
-                          <Smartphone className={`h-5 w-5 ${
-                            currentBrand.id === "galapagos" ? "text-blue-400" : "text-primary"
-                          }`} />
-                          <span className="text-sm font-bold text-white">{statusLabel}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-white/50">
-                          <AlertCircle className="h-5 w-5" />
-                          <span className="text-xs font-medium">
-                            Expira em: {formattedExpiresAt || "aguardando resposta"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {challengeStatus === "EXPIRED" ? (
-                        <Button
-                          onClick={handleRestartFlow}
-                          className="w-full max-w-md h-14 text-base font-black bg-brand-accent hover:bg-brand-accent-hover text-white rounded-[2px]"
-                        >
-                          <RefreshCcw className="h-5 w-5 mr-2" />
-                          REINICIAR ACESSO
-                        </Button>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <Loader2 className="h-4 w-4 animate-spin text-white/20" />
-                          <span className="text-[10px] uppercase tracking-[0.4em] font-black text-white/30">
-                            Aguardando aprovação automática
-                          </span>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                </form>
               </motion.div>
             )}
           </AnimatePresence>

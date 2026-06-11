@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 interface AgentOnboardingProps {
   onBack: () => void;
@@ -43,6 +44,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
     birthDate: "",
     email: "",
     whatsapp: "",
+    password: "",
     // Step 2: Complementary Address Data
     cep: "",
     street: "",
@@ -57,16 +59,67 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
     referrerCpf: ""
   });
 
+  const checkAndPrefillFromAppointment = async (cpfVal: string) => {
+    try {
+      const res = await api.get(`/api/agents/search-appointment?cpf=${encodeURIComponent(cpfVal)}`);
+      if (res.data && res.data.success && res.data.data) {
+        const appointment = res.data.data;
+        toast.success(`Dados de agendamento comercial encontrados! Preenchendo dados...`);
+        setFormData((prev) => ({
+          ...prev,
+          fullName: appointment.fullName || prev.fullName,
+          email: appointment.email || prev.email,
+          birthDate: appointment.birthDate || prev.birthDate,
+          whatsapp: appointment.whatsapp || prev.whatsapp,
+          cep: appointment.cep || prev.cep,
+          street: appointment.street || prev.street,
+          number: appointment.number || prev.number,
+          complement: appointment.complement || prev.complement || "",
+          neighborhood: appointment.neighborhood || prev.neighborhood,
+          city: appointment.city || prev.city,
+          state: appointment.state || prev.state,
+        }));
+      }
+    } catch (err) {
+      console.log("No appointment found for this CPF.");
+    }
+  };
+
   // Mask functions
   const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>, field: "cpf" | "referrerCpf") => {
     const raw = e.target.value;
-    const masked = raw
-      .replace(/\D/g, "")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})/, "$1-$2")
-      .slice(0, 14);
+    const v = raw.replace(/\D/g, "");
+    let masked = "";
+    
+    if (field === "referrerCpf") {
+      masked = v
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+        .slice(0, 14);
+    } else {
+      if (v.length <= 11) {
+        masked = v
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+          .slice(0, 14);
+      } else {
+        masked = v
+          .replace(/(\d{2})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1.$2")
+          .replace(/(\d{3})(\d)/, "$1/$2")
+          .replace(/(\d{4})(\d{1,2})/, "$1-$2")
+          .slice(0, 18);
+      }
+    }
+    
     setFormData((prev) => ({ ...prev, [field]: masked }));
+
+    const cleanVal = masked.replace(/\D/g, "");
+    if (field === "cpf" && (cleanVal.length === 11 || cleanVal.length === 14)) {
+      checkAndPrefillFromAppointment(masked);
+    }
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,9 +181,12 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         newErrors.fullName = "Nome completo é obrigatório.";
       }
       if (!formData.cpf) {
-        newErrors.cpf = "CPF é obrigatório.";
-      } else if (formData.cpf.length < 14) {
-        newErrors.cpf = "CPF inválido.";
+        newErrors.cpf = "CPF ou CNPJ é obrigatório.";
+      } else {
+        const cleanVal = formData.cpf.replace(/\D/g, "");
+        if (cleanVal.length !== 11 && cleanVal.length !== 14) {
+          newErrors.cpf = "Documento (CPF ou CNPJ) inválido.";
+        }
       }
       if (!formData.birthDate) {
         newErrors.birthDate = "Data de nascimento é obrigatória.";
@@ -146,6 +202,11 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         newErrors.whatsapp = "WhatsApp é obrigatório.";
       } else if (formData.whatsapp.length < 15) { // (00) 00000-0000 has 15 chars
         newErrors.whatsapp = "WhatsApp inválido.";
+      }
+      if (!formData.password) {
+        newErrors.password = "Senha é obrigatória.";
+      } else if (formData.password.length < 6) {
+        newErrors.password = "A senha deve ter no mínimo 6 caracteres.";
       }
 
       if (Object.keys(newErrors).length > 0) {
@@ -225,81 +286,68 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/onboarding/contract", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fullName: formData.fullName,
-          cpf: formData.cpf,
-          email: formData.email,
-          whatsapp: formData.whatsapp,
-          cep: formData.cep,
-          street: formData.street,
-          number: formData.number,
-          complement: formData.complement,
-          neighborhood: formData.neighborhood,
-          city: formData.city,
-          state: formData.state
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao gerar contrato");
-      }
-
-      let finalPdfUrl = "";
-      let finalSigLink = "";
-
-      if (data.pdfBase64) {
-        // Decode base64 and create a local client-side Blob URL
-        const byteCharacters = atob(data.pdfBase64);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: "application/pdf" });
-        const blobUrl = URL.createObjectURL(blob);
-        setPdfPreviewUrl(blobUrl);
-        finalPdfUrl = blobUrl;
-        
-        if (data.isMock) {
-          setSignatureLink(blobUrl);
-          finalSigLink = blobUrl;
-        } else {
-          setSignatureLink(data.signatureLink || "");
-          finalSigLink = data.signatureLink || "";
-        }
-      } else {
-        setSignatureLink(data.signatureLink || "");
-        setPdfPreviewUrl(data.pdfUrl || "");
-        finalPdfUrl = data.pdfUrl || "";
-        finalSigLink = data.signatureLink || "";
-      }
-      setIsMock(!!data.isMock);
-
-      // Save contract info to localStorage for dashboard retrieval
-      const contractData = {
+      const response = await api.post("/api/agents/onboarding", {
         fullName: formData.fullName,
         cpf: formData.cpf,
         email: formData.email,
         whatsapp: formData.whatsapp,
-        date: new Date().toLocaleDateString("pt-BR"),
-        pdfPreviewUrl: finalPdfUrl,
-        signatureLink: finalSigLink,
-        isMock: !!data.isMock
-      };
-      localStorage.setItem("signedContract", JSON.stringify(contractData));
+        cep: formData.cep,
+        street: formData.street,
+        number: formData.number,
+        complement: formData.complement,
+        neighborhood: formData.neighborhood,
+        city: formData.city,
+        state: formData.state,
+        birthDate: formData.birthDate,
+        password: formData.password,
+        hasReferral: formData.hasReferral,
+        referrerName: formData.referrerName,
+        referrerCpf: formData.referrerCpf
+      });
 
-      toast.success("Cadastro realizado com sucesso!");
+      const resData = response.data;
+
+      if (!resData.success) {
+        throw new Error(resData.error || "Erro ao realizar cadastro.");
+      }
+
+      const { agent, contractId, signatureLink, pdfUrl, isMock } = resData.data;
+
+      // Save contract info to localStorage for dashboard retrieval
+      const contractData = {
+        agentId: agent.id,
+        fullName: agent.fullName,
+        cpf: agent.cpf,
+        email: agent.email,
+        whatsapp: agent.whatsapp,
+        date: new Date().toLocaleDateString("pt-BR"),
+        pdfPreviewUrl: pdfUrl,
+        signatureLink: signatureLink,
+        isMock: isMock
+      };
+      
+      localStorage.setItem("signedContract", JSON.stringify(contractData));
+      localStorage.setItem("agentId", agent.id);
+      localStorage.setItem("userName", agent.fullName);
+      localStorage.setItem("userEmail", agent.email);
+      localStorage.setItem("userCpf", agent.cpf);
+      localStorage.setItem("userWhatsapp", agent.whatsapp);
+
+      // Set session expiration to 15 mins from now
+      localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
+      localStorage.setItem("token", "bypass-token");
+      localStorage.setItem("userToken", "bypass-user-token");
+
+      toast.success("Cadastro e contrato gerados com sucesso!");
+      
+      setPdfPreviewUrl(pdfUrl);
+      setSignatureLink(signatureLink);
+      setIsMock(isMock);
       setFinished(true);
     } catch (error: any) {
       console.error("Error submitting onboarding:", error);
-      toast.error(error.message || "Falha ao processar o cadastro. Tente novamente.");
+      const errMsg = error.response?.data?.error || error.message || "Falha ao processar o cadastro. Tente novamente.";
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
@@ -528,6 +576,43 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* CPF/CNPJ Highlighted Field */}
+                    <div className="space-y-1.5 md:col-span-2 bg-brand-accent/[0.02] border border-brand-accent/20 rounded-sm p-4 relative group/cpf shadow-[0_0_15px_rgba(255,122,0,0.02)] transition-all hover:border-brand-accent/40">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-brand-accent flex items-center gap-1.5">
+                          <Sparkles className="h-3 w-3 text-brand-accent animate-pulse" />
+                          CPF / CNPJ
+                        </label>
+                        <span className="text-[9px] font-bold text-white uppercase tracking-wider bg-brand-accent/20 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                          ⚡ Autocompletar
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id="cpf"
+                          value={formData.cpf}
+                          onChange={(e) => {
+                            handleCpfChange(e, "cpf");
+                            if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
+                          }}
+                          placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                          className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all font-mono tracking-widest ${
+                            errors.cpf 
+                              ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" 
+                              : "border-white/10 hover:border-brand-accent/40 focus-visible:border-brand-accent focus-visible:ring-brand-accent/20"
+                          }`}
+                        />
+                      </div>
+                      <p className="text-[10px] text-neutral-400 font-medium leading-relaxed">
+                        Ao digitar seu CPF ou CNPJ, se houver um agendamento prévio, seus dados de cadastro e endereço serão preenchidos automaticamente.
+                      </p>
+                      {errors.cpf && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.cpf}
+                        </motion.span>
+                      )}
+                    </div>
+
                     <div className="space-y-1.5 md:col-span-2">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Nome Completo</label>
                       <Input
@@ -550,27 +635,6 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
-                      <Input
-                        id="cpf"
-                        value={formData.cpf}
-                        onChange={(e) => {
-                          handleCpfChange(e, "cpf");
-                          if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
-                        }}
-                        placeholder="000.000.000-00"
-                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.cpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
-                        }`}
-                      />
-                      {errors.cpf && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
-                          {errors.cpf}
-                        </motion.span>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Data de Nascimento</label>
                       <Input
                         id="birthDate"
@@ -587,6 +651,27 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                       {errors.birthDate && (
                         <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
                           {errors.birthDate}
+                        </motion.span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">WhatsApp</label>
+                      <Input
+                        id="whatsapp"
+                        value={formData.whatsapp}
+                        onChange={(e) => {
+                          handlePhoneChange(e);
+                          if (errors.whatsapp) setErrors((prev) => { const c = { ...prev }; delete c.whatsapp; return c; });
+                        }}
+                        placeholder="(00) 00000-0000"
+                        className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
+                          errors.whatsapp ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                        }`}
+                      />
+                      {errors.whatsapp && (
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                          {errors.whatsapp}
                         </motion.span>
                       )}
                     </div>
@@ -614,22 +699,23 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">WhatsApp</label>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Senha de Acesso</label>
                       <Input
-                        id="whatsapp"
-                        value={formData.whatsapp}
+                        id="password"
+                        type="password"
+                        value={formData.password}
                         onChange={(e) => {
-                          handlePhoneChange(e);
-                          if (errors.whatsapp) setErrors((prev) => { const c = { ...prev }; delete c.whatsapp; return c; });
+                          setFormData((prev) => ({ ...prev, password: e.target.value }));
+                          if (errors.password) setErrors((prev) => { const c = { ...prev }; delete c.password; return c; });
                         }}
-                        placeholder="(00) 00000-0000"
+                        placeholder="Mínimo de 6 caracteres"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.whatsapp ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.password ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
                         }`}
                       />
-                      {errors.whatsapp && (
+                      {errors.password && (
                         <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
-                          {errors.whatsapp}
+                          {errors.password}
                         </motion.span>
                       )}
                     </div>
@@ -916,7 +1002,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF</label>
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF / CNPJ</label>
                             <Input
                               value={formData.cpf}
                               onChange={(e) => handleCpfChange(e, "cpf")}
@@ -952,7 +1038,8 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                               type="button"
                               onClick={() => {
                                 if (!formData.fullName.trim()) return toast.error("Nome completo é obrigatório.");
-                                if (formData.cpf.length < 14) return toast.error("CPF inválido.");
+                                const cleanVal = formData.cpf.replace(/\D/g, "");
+                                if (cleanVal.length !== 11 && cleanVal.length !== 14) return toast.error("Documento (CPF ou CNPJ) inválido.");
                                 if (formData.birthDate.length < 10) return toast.error("Data de nascimento inválida.");
                                 if (!formData.email.trim() || !formData.email.includes("@")) return toast.error("E-mail inválido.");
                                 if (formData.whatsapp.length < 15) return toast.error("WhatsApp inválido.");
@@ -971,7 +1058,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                             <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.fullName}</p>
                           </div>
                           <div>
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF</span> 
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF / CNPJ</span> 
                             <p className="text-lg font-black text-white tracking-tight mt-0.5">{formData.cpf}</p>
                           </div>
                           <div>

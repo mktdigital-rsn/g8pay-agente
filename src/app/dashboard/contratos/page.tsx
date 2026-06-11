@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 export default function ContratosPage() {
   const [contract, setContract] = useState<any>(null);
@@ -23,17 +24,47 @@ export default function ContratosPage() {
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
 
   useEffect(() => {
-    // Load signed contract from localStorage
+    const agentId = localStorage.getItem("agentId");
+    
+    // Fallback: load signed contract from localStorage if it's already there
     const signedContractStr = localStorage.getItem("signedContract");
     if (signedContractStr) {
       try {
         const parsed = JSON.parse(signedContractStr);
         setContract(parsed);
-        setSelectedDoc("signed"); // Default to signed if they have one
+        setSelectedDoc("signed");
       } catch (err) {
         console.error("Error parsing contract data:", err);
       }
-    } else {
+    }
+
+    if (agentId) {
+      const fetchContract = async () => {
+        try {
+          const response = await api.get(`/api/contracts?agentId=${agentId}`);
+          if (response.data && response.data.success && response.data.data.length > 0) {
+            const apiContract = response.data.data[0];
+            const updatedContract = {
+              agentId: apiContract.agentId,
+              fullName: localStorage.getItem("userName") || "Agente G8Pay",
+              cpf: localStorage.getItem("userCpf") || "---",
+              email: localStorage.getItem("userEmail") || "---",
+              whatsapp: localStorage.getItem("userWhatsapp") || "---",
+              date: new Date(apiContract.createdAt).toLocaleDateString("pt-BR"),
+              pdfPreviewUrl: `${api.defaults.baseURL}/api/contracts/${apiContract.id}/download`,
+              signatureLink: apiContract.signatureLink,
+              isMock: !apiContract.signatureLink?.includes("d4sign")
+            };
+            setContract(updatedContract);
+            setSelectedDoc("signed");
+            localStorage.setItem("signedContract", JSON.stringify(updatedContract));
+          }
+        } catch (err) {
+          console.error("Error fetching contract from API:", err);
+        }
+      };
+      fetchContract();
+    } else if (!signedContractStr) {
       setSelectedDoc("model");
     }
   }, []);
