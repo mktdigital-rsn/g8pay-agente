@@ -55,9 +55,59 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
     state: "",
     // Step 3: Referral Data
     hasReferral: false,
-    referrerName: "",
-    referrerCpf: ""
+    referrerName: ""
   });
+
+  const checkCpfAvailability = async (cpfVal: string) => {
+    const cleanVal = cpfVal.replace(/\D/g, "");
+    if (cleanVal.length !== 11 && cleanVal.length !== 14) return;
+    
+    try {
+      const res = await api.get(`/api/agents/check-cpf?cpf=${encodeURIComponent(cpfVal)}`);
+      if (res.data && res.data.success) {
+        const { exists, isValid } = res.data;
+        if (!isValid) {
+          setErrors((prev) => ({ ...prev, cpf: "Documento (CPF ou CNPJ) inválido." }));
+        } else if (exists) {
+          setErrors((prev) => ({ ...prev, cpf: "CPF/CNPJ já cadastrado." }));
+        } else {
+          setErrors((prev) => {
+            const c = { ...prev };
+            if (c.cpf === "CPF/CNPJ já cadastrado." || c.cpf === "Documento (CPF ou CNPJ) inválido.") {
+              delete c.cpf;
+            }
+            return c;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error checking CPF availability", err);
+    }
+  };
+
+  const checkEmailAvailability = async (emailVal: string) => {
+    if (!emailVal.trim() || !emailVal.includes("@")) return;
+    
+    try {
+      const res = await api.get(`/api/agents/check-email?email=${encodeURIComponent(emailVal.trim())}`);
+      if (res.data && res.data.success) {
+        const { exists } = res.data;
+        if (exists) {
+          setErrors((prev) => ({ ...prev, email: "E-mail já cadastrado." }));
+        } else {
+          setErrors((prev) => {
+            const c = { ...prev };
+            if (c.email === "E-mail já cadastrado.") {
+              delete c.email;
+            }
+            return c;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error checking email availability", err);
+    }
+  };
 
   const checkAndPrefillFromAppointment = async (cpfVal: string) => {
     try {
@@ -119,6 +169,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
     const cleanVal = masked.replace(/\D/g, "");
     if (field === "cpf" && (cleanVal.length === 11 || cleanVal.length === 14)) {
       checkAndPrefillFromAppointment(masked);
+      checkCpfAvailability(masked);
     }
   };
 
@@ -209,6 +260,13 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         newErrors.password = "A senha deve ter no mínimo 6 caracteres.";
       }
 
+      if (errors.cpf) {
+        newErrors.cpf = errors.cpf;
+      }
+      if (errors.email) {
+        newErrors.email = errors.email;
+      }
+
       if (Object.keys(newErrors).length > 0) {
         setErrors(newErrors);
         const firstErrorField = Object.keys(newErrors)[0];
@@ -251,11 +309,6 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
       if (formData.hasReferral) {
         if (!formData.referrerName.trim()) {
           newErrors.referrerName = "Nome do indicador é obrigatório.";
-        }
-        if (!formData.referrerCpf) {
-          newErrors.referrerCpf = "CPF do indicador é obrigatório.";
-        } else if (formData.referrerCpf.length < 14) {
-          newErrors.referrerCpf = "CPF do indicador inválido.";
         }
 
         if (Object.keys(newErrors).length > 0) {
@@ -301,8 +354,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         birthDate: formData.birthDate,
         password: formData.password,
         hasReferral: formData.hasReferral,
-        referrerName: formData.referrerName,
-        referrerCpf: formData.referrerCpf
+        referrerName: formData.referrerName
       });
 
       const resData = response.data;
@@ -595,6 +647,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                             handleCpfChange(e, "cpf");
                             if (errors.cpf) setErrors((prev) => { const c = { ...prev }; delete c.cpf; return c; });
                           }}
+                          onBlur={() => checkCpfAvailability(formData.cpf)}
                           placeholder="000.000.000-00 ou 00.000.000/0000-00"
                           className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all font-mono tracking-widest ${
                             errors.cpf 
@@ -686,6 +739,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                           setFormData((prev) => ({ ...prev, email: e.target.value }));
                           if (errors.email) setErrors((prev) => { const c = { ...prev }; delete c.email; return c; });
                         }}
+                        onBlur={() => checkEmailAvailability(formData.email)}
                         placeholder="contato@exemplo.com"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
                           errors.email ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
@@ -938,26 +992,6 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                             {errors.referrerName && (
                               <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
                                 {errors.referrerName}
-                              </motion.span>
-                            )}
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF do Indicador</label>
-                            <Input
-                              id="referrerCpf"
-                              value={formData.referrerCpf}
-                              onChange={(e) => {
-                                handleCpfChange(e, "referrerCpf");
-                                if (errors.referrerCpf) setErrors((prev) => { const c = { ...prev }; delete c.referrerCpf; return c; });
-                              }}
-                              placeholder="000.000.000-00"
-                              className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                                errors.referrerCpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
-                              }`}
-                            />
-                            {errors.referrerCpf && (
-                              <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
-                                {errors.referrerCpf}
                               </motion.span>
                             )}
                           </div>
@@ -1245,14 +1279,6 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                                   className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
                                 />
                               </div>
-                              <div className="space-y-1.5">
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">CPF do Indicador</label>
-                                <Input
-                                  value={formData.referrerCpf}
-                                  onChange={(e) => handleCpfChange(e, "referrerCpf")}
-                                  className="h-10 bg-white/[0.02] border-white/10 text-white rounded-[2px]"
-                                />
-                              </div>
                             </div>
                           )}
 
@@ -1262,7 +1288,6 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                               onClick={() => {
                                 if (formData.hasReferral) {
                                   if (!formData.referrerName.trim()) return toast.error("Nome do indicador é obrigatório.");
-                                  if (formData.referrerCpf.length < 14) return toast.error("CPF do indicador inválido.");
                                 }
                                 setEditingSection(null);
                               }}
@@ -1280,13 +1305,9 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                                 <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Tipo de Indicação</span> 
                                 <p className="text-emerald-400 font-black tracking-tight mt-0.5">Indicado por Parceiro</p>
                               </div>
-                              <div>
+                              <div className="sm:col-span-2">
                                 <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">Nome do Indicador</span> 
                                 <p className="text-base font-black text-white mt-0.5">{formData.referrerName}</p>
-                              </div>
-                              <div>
-                                <span className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold block">CPF do Indicador</span> 
-                                <p className="text-base font-black text-white mt-0.5">{formData.referrerCpf}</p>
                               </div>
                             </div>
                           ) : (
