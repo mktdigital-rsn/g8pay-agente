@@ -69,6 +69,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
         if (!isValid) {
           setErrors((prev) => ({ ...prev, cpf: "Documento (CPF ou CNPJ) inválido." }));
         } else if (exists) {
+          
           setErrors((prev) => ({ ...prev, cpf: "CPF/CNPJ já cadastrado." }));
         } else {
           setErrors((prev) => {
