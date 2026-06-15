@@ -23,7 +23,7 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { currentBrand } from "@/config/brand";
 
-type LoginStep = "identifier" | "password";
+type LoginStep = "identifier" | "password" | "forgot_password" | "reset_password";
 type ChallengeStatus = "PENDING" | "APPROVED" | "EXPIRED";
 
 type ChallengeResponse = {
@@ -70,6 +70,13 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const [hasFinalized, setHasFinalized] = useState(false);
   const [progress, setProgress] = useState(0);
   const pollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Password Recovery States
+  const [forgotCpf, setForgotCpf] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
 
   useEffect(() => {
     if (challengeStatus === "APPROVED") {
@@ -189,6 +196,94 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
     setPassword("");
     setStep("identifier");
     setIsLoading(false);
+  };
+
+  const handleForgotCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const v = raw.replace(/\D/g, "");
+    let masked = "";
+    if (v.length <= 11) {
+      masked = v
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d{1,2})/, "$1-$2")
+        .slice(0, 14);
+    } else {
+      masked = v
+        .replace(/(\d{2})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1.$2")
+        .replace(/(\d{3})(\d)/, "$1/$2")
+        .replace(/(\d{4})(\d{1,2})/, "$1-$2")
+        .slice(0, 18);
+    }
+    setForgotCpf(masked);
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotCpf) {
+      toast.error("Por favor, informe seu CPF ou CNPJ.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const cleanCpf = forgotCpf.replace(/\D/g, "");
+      const response = await api.post("/api/agents/forgot-password", { cpf: cleanCpf });
+      
+      if (response.data && response.data.success) {
+        setMaskedEmail(response.data.email);
+        toast.success("Código de recuperação enviado para o e-mail cadastrado!");
+        setStep("reset_password");
+      }
+    } catch (err: any) {
+      console.error("Forgot password error:", err);
+      toast.error(err.response?.data?.error || "Erro ao solicitar recuperação. Verifique o documento.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryCode || !newPassword || !confirmNewPassword) {
+      toast.error("Por favor, preencha todos os campos.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      toast.error("As senhas não coincidem.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const cleanCpf = forgotCpf.replace(/\D/g, "");
+      const response = await api.post("/api/agents/reset-password", {
+        cpf: cleanCpf,
+        code: recoveryCode,
+        newPassword: newPassword,
+      });
+
+      if (response.data && response.data.success) {
+        toast.success("Senha alterada com sucesso! Faça login com sua nova senha.");
+        setPassword("");
+        setRecoveryCode("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setStep("password");
+      }
+    } catch (err: any) {
+      console.error("Reset password error:", err);
+      toast.error(err.response?.data?.error || "Erro ao redefinir senha. Verifique o código de verificação.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -394,6 +489,18 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                       onChange={(e) => setPassword(e.target.value)}
                       autoFocus
                     />
+                    <div className="text-right pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForgotCpf(identifier);
+                          setStep("forgot_password");
+                        }}
+                        className="text-[10px] font-black uppercase tracking-widest text-brand-accent hover:underline cursor-pointer"
+                      >
+                        Esqueci minha senha?
+                      </button>
+                    </div>
                   </div>
 
                   <Button
@@ -412,6 +519,149 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                       </span>
                     ) : (
                       "ENTRAR E ACESSAR"
+                    )}
+                  </Button>
+                </form>
+              </motion.div>
+            )}
+
+            {step === "forgot_password" && (
+              <motion.div
+                key="step-forgot"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-10 mt-12 lg:mt-0"
+              >
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setStep("password")}
+                    className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                    type="button"
+                  >
+                    <ChevronLeft className="h-6 w-6 text-white/50" />
+                  </button>
+                  <div>
+                    <h2 className="text-2xl font-black text-white">Recuperar Senha</h2>
+                    <p className="text-white/40 text-sm font-medium">Informe seu CPF/CNPJ para iniciar</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleForgotSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">CPF / CNPJ</label>
+                    <Input
+                      placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                      className="h-16 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold text-lg rounded-[2px]"
+                      value={forgotCpf}
+                      onChange={handleForgotCpfChange}
+                      autoFocus
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className={`w-full h-16 text-lg font-black text-white rounded-[2px] shadow-lg cursor-pointer transition-all ${
+                      currentBrand.id === "galapagos"
+                        ? "bg-blue-500 hover:bg-blue-400"
+                        : "bg-brand-accent hover:bg-brand-accent-hover"
+                    }`}
+                    disabled={isLoading || !forgotCpf}
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2 justify-center w-full">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Enviando...
+                      </span>
+                    ) : (
+                      "ENVIAR CÓDIGO"
+                    )}
+                  </Button>
+                </form>
+              </motion.div>
+            )}
+
+            {step === "reset_password" && (
+              <motion.div
+                key="step-reset"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-8 mt-12 lg:mt-0"
+              >
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setStep("forgot_password")}
+                    className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                    type="button"
+                  >
+                    <ChevronLeft className="h-6 w-6 text-white/50" />
+                  </button>
+                  <div>
+                    <h2 className="text-2xl font-black text-white">Definir Nova Senha</h2>
+                    <p className="text-white/40 text-xs font-bold uppercase tracking-wide">Para: {forgotCpf}</p>
+                  </div>
+                </div>
+
+                <div className="bg-white/[0.02] border border-white/5 p-4 rounded-sm">
+                  <p className="text-xs text-neutral-300 leading-relaxed">
+                    Instruções enviadas para o e-mail cadastrado <strong className="text-white">{maskedEmail}</strong>. 
+                  </p>
+                  <p className="text-[10px] text-amber-500 font-bold mt-2">
+                    💡 Para testes locais, utilize o código de verificação: <strong>123456</strong>
+                  </p>
+                </div>
+
+                <form onSubmit={handleResetSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">Código de Verificação</label>
+                    <Input
+                      placeholder="Digite o código de 6 dígitos"
+                      className="h-14 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold rounded-[2px]"
+                      value={recoveryCode}
+                      onChange={(e) => setRecoveryCode(e.target.value)}
+                      maxLength={6}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">Nova Senha</label>
+                    <Input
+                      type="password"
+                      placeholder="Digite sua nova senha"
+                      className="h-14 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold rounded-[2px]"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">Confirmar Nova Senha</label>
+                    <Input
+                      type="password"
+                      placeholder="Confirme sua nova senha"
+                      className="h-14 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold rounded-[2px]"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className={`w-full h-16 text-lg font-black text-white rounded-[2px] shadow-lg cursor-pointer transition-all mt-4 ${
+                      currentBrand.id === "galapagos"
+                        ? "bg-blue-500 hover:bg-blue-400"
+                        : "bg-brand-accent hover:bg-brand-accent-hover"
+                    }`}
+                    disabled={isLoading || !recoveryCode || !newPassword || !confirmNewPassword}
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2 justify-center w-full">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Redefinindo...
+                      </span>
+                    ) : (
+                      "ALTERAR SENHA"
                     )}
                   </Button>
                 </form>

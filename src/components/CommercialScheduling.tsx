@@ -20,6 +20,30 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import api from "@/lib/api";
+import { currentBrand } from "@/config/brand";
+
+const YellowTriangleRedQuestion = () => (
+  <svg 
+    viewBox="0 0 24 24" 
+    className="h-3.5 w-3.5 shrink-0 inline-block mr-1.5 align-middle"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path 
+      d="M12 3L2 21H22L12 3Z" 
+      fill="#F59E0B"
+    />
+    <text 
+      x="12" 
+      y="17.5" 
+      fill="#EF4444"
+      fontSize="14" 
+      fontWeight="900" 
+      textAnchor="middle"
+      fontFamily="sans-serif"
+    >?</text>
+  </svg>
+);
 
 interface CommercialSchedulingProps {
   onBack: () => void;
@@ -312,11 +336,16 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-[750px] bg-[#18181b] border border-white/5 p-16 md:p-20 text-center rounded-[2px] shadow-2xl relative z-10 space-y-12"
+          className="w-full max-w-[750px] bg-[#18181b] border border-white/5 p-16 md:p-20 text-center rounded-[2px] shadow-2xl relative z-10 space-y-10"
         >
+          {/* Logotipo do G8Pay acima */}
+          <div className="flex justify-center mb-5">
+            <img src={currentBrand.logoWhite} alt={`${currentBrand.name} Logo`} className="h-14 md:h-16 object-contain" />
+          </div>
+
           <div className="relative flex justify-center">
-            <div className="w-32 h-32 rounded-full bg-amber-500/10 border-2 border-brand-accent/30 flex items-center justify-center">
-              <CheckCircle2 className="h-20 w-20 text-brand-accent animate-pulse" />
+            <div className="w-32 h-32 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
+              <CheckCircle2 className="h-20 w-20 text-emerald-500 animate-pulse" />
             </div>
           </div>
 
@@ -420,11 +449,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="Insira seu nome completo"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.fullName ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.fullName ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.fullName && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.fullName}
                         </motion.span>
                       )}
@@ -441,11 +471,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="000.000.000-00 ou 00.000.000/0000-00"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all font-mono ${
-                          errors.cpf ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.cpf ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.cpf && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.cpf}
                         </motion.span>
                       )}
@@ -462,11 +493,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="DD/MM/AAAA"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.birthDate ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.birthDate ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.birthDate && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.birthDate}
                         </motion.span>
                       )}
@@ -484,11 +516,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="contato@exemplo.com"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.email ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.email ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.email && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.email}
                         </motion.span>
                       )}
@@ -505,11 +538,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="(00) 00000-0000"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.whatsapp ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.whatsapp ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.whatsapp && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.whatsapp}
                         </motion.span>
                       )}
@@ -538,7 +572,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                           }}
                           placeholder="00000-000"
                           className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                            errors.cep ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                            errors.cep ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                           }`}
                         />
                         {loading && (
@@ -546,7 +580,8 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         )}
                       </div>
                       {errors.cep && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.cep}
                         </motion.span>
                       )}
@@ -563,11 +598,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="Rua, Avenida, etc."
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.street ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.street ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.street && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.street}
                         </motion.span>
                       )}
@@ -584,11 +620,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="123"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.number ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.number ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.number && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.number}
                         </motion.span>
                       )}
@@ -616,11 +653,12 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="Bairro"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.neighborhood ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.neighborhood ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                       />
                       {errors.neighborhood && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.neighborhood}
                         </motion.span>
                       )}
@@ -637,12 +675,13 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="Cidade"
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.city ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.city ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                         disabled
                       />
                       {errors.city && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.city}
                         </motion.span>
                       )}
@@ -659,12 +698,13 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                         }}
                         placeholder="SP, RJ, etc."
                         className={`h-12 bg-white/[0.02] text-white rounded-[2px] transition-all ${
-                          errors.state ? "border-red-500/80 bg-red-500/[0.01] focus-visible:ring-red-500/30" : "border-white/10"
+                          errors.state ? "border-amber-500/80 bg-amber-500/[0.01] focus-visible:ring-amber-500/30" : "border-white/10"
                         }`}
                         disabled
                       />
                       {errors.state && (
-                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[10px] text-red-500 font-bold block mt-1">
+                        <motion.span initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-[12px] text-amber-500 font-bold flex items-center mt-1">
+                          <YellowTriangleRedQuestion />
                           {errors.state}
                         </motion.span>
                       )}
