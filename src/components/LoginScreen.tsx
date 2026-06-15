@@ -137,6 +137,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
         localStorage.setItem("userEmail", agent.email);
         localStorage.setItem("userCpf", agent.cpf);
         localStorage.setItem("userWhatsapp", agent.whatsapp);
+        localStorage.setItem("userRole", agent.role || "agent");
 
         // Try getting contract from API to update local signedContract
         try {

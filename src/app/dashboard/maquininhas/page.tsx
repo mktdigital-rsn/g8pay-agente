@@ -112,7 +112,7 @@ export default function MaquininhasPage() {
     // Informações Financeiras
     faturamentoMensal: "",
     ticketMedio: "",
-    antecipacaoRecebeiveis: "",
+    antecipacaoRecebiveis: "",
 
     // Endereço
     tipoEndereco: "",
@@ -283,23 +283,28 @@ export default function MaquininhasPage() {
     const normalizedName = normalizeFileName(docType, file.name);
     const fakeUrl = URL.createObjectURL(file);
 
-    setFormData(prev => {
-      const currentDocs = prev.documents[docType] || [];
-      const maxFiles = docType === "Foto da Fachada" ? 3 : 1;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      setFormData(prev => {
+        const currentDocs = prev.documents[docType] || [];
+        const maxFiles = docType === "Foto da Fachada" ? 3 : 1;
 
-      if (currentDocs.length >= maxFiles) {
-        toast.error(`Limite de arquivos para ${docType} atingido.`);
-        return prev;
-      }
-
-      return {
-        ...prev,
-        documents: {
-          ...prev.documents,
-          [docType]: [...currentDocs, { name: normalizedName, url: fakeUrl }]
+        if (currentDocs.length >= maxFiles) {
+          toast.error(`Limite de arquivos para ${docType} atingido.`);
+          return prev;
         }
-      };
-    });
+
+        return {
+          ...prev,
+          documents: {
+            ...prev.documents,
+            [docType]: [...currentDocs, { name: normalizedName, url: fakeUrl, base64 }]
+          }
+        };
+      });
+    };
+    reader.readAsDataURL(file);
 
     if (!attachedDocs.includes(docType)) {
       setAttachedDocs(prev => [...prev, docType]);
@@ -406,10 +411,45 @@ export default function MaquininhasPage() {
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    setIsSubmitting(false);
-    setStep("success");
-    toast.success("Solicitação enviada com sucesso!");
+    try {
+      const agentId = localStorage.getItem("agentId") || "unknown-agent";
+      const payload = {
+        ...formData,
+        agentId,
+      };
+
+      const response = await api.post("/api/establishments", payload);
+      if (response.data && response.data.success) {
+        toast.success("Solicitação enviada com sucesso!");
+        setStep("success");
+      } else {
+        throw new Error(response.data?.error || "Erro ao salvar estabelecimento.");
+      }
+    } catch (err: any) {
+      console.error("Error saving E.C.:", err);
+      
+      const serverError = err.response?.data?.error || "";
+      const localError = err.message || "";
+      const fullErrorText = `${serverError} ${localError}`;
+      
+      let errMsg = "Ocorreu um erro ao processar o credenciamento do estabelecimento. Verifique os dados e tente novamente.";
+      
+      if (fullErrorText.includes("UNIQUE constraint failed") || fullErrorText.includes("SQLITE_CONSTRAINT_UNIQUE")) {
+        errMsg = "Este CNPJ/CPF já está cadastrado para outro estabelecimento comercial.";
+      } else if (fullErrorText.includes("NOT NULL constraint failed") || fullErrorText.includes("SQLITE_CONSTRAINT_NOTNULL")) {
+        errMsg = "Por favor, preencha todos os campos obrigatórios e envie os documentos solicitados.";
+      } else if (fullErrorText.includes("FOREIGN KEY constraint failed") || fullErrorText.includes("SQLITE_CONSTRAINT_FOREIGNKEY")) {
+        errMsg = "Erro de consistência de dados (Agente responsável não encontrado).";
+      } else if (fullErrorText.includes("Network Error") || fullErrorText.includes("Failed to fetch")) {
+        errMsg = "Não foi possível conectar ao servidor. Verifique sua conexão com a internet.";
+      } else if (serverError && !serverError.includes("insert into") && !serverError.includes("constraint") && !serverError.includes("values")) {
+        errMsg = serverError;
+      }
+      
+      toast.error(errMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleReset = () => {
@@ -431,7 +471,7 @@ export default function MaquininhasPage() {
       cnae: "",
       faturamentoMensal: "",
       ticketMedio: "",
-      antecipacaoRecebeiveis: "",
+      antecipacaoRecebiveis: "",
       tipoEndereco: "",
       cep: "",
       rua: "",
@@ -697,8 +737,8 @@ export default function MaquininhasPage() {
                   <FormSelect
                     label="Antecipação de Recebíveis"
                     required
-                    value={formData.antecipacaoRecebeiveis}
-                    onChange={(v) => updateField("antecipacaoRecebeiveis", v)}
+                    value={formData.antecipacaoRecebiveis}
+                    onChange={(v) => updateField("antecipacaoRecebiveis", v)}
                     options={["Sim", "Não"]}
                   />
                 </div>
@@ -773,29 +813,31 @@ export default function MaquininhasPage() {
                           <Button variant="destructive" size="sm" onClick={() => removeConta(idx)} className="h-8 text-[9px] font-black uppercase tracking-widest px-4 rounded-[2px]">Remover</Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
-                        <FormSelect
-                          label="Tipo de Conta"
-                          value={conta.tipoConta}
-                          onChange={(v) => updateConta(idx, "tipoConta", v)}
-                          options={["Conta Corrente", "Conta Poupança (EM BREVE)", "Conta Pagamento (EM BREVE)"]}
-                        />
-                        <FormSelect
-                          label="Banco"
-                          value={conta.banco}
-                          onChange={(v) => updateConta(idx, "banco", v)}
-                          options={bancosList.map(b => `${b.code} - ${b.name}`)}
-                        />
-                        <div className="flex gap-4">
-                          <div className="flex-1">
-                            <FormField label="Agência" value={conta.agencia} onChange={(v) => updateConta(idx, "agencia", v.replace(/\D/g, "").substring(0, 4))} placeholder="0000" />
-                          </div>
-                          <div className="flex-[2]">
-                            <FormField label="Conta" value={conta.conta} onChange={(v) => updateConta(idx, "conta", v.replace(/\D/g, "").substring(0, 12))} placeholder="000000" />
-                          </div>
-                          <div className="w-24">
-                            <FormField label="Dígito" value={conta.digito} onChange={(v) => updateConta(idx, "digito", v.replace(/\D/g, "").substring(0, 1))} placeholder="X" />
-                          </div>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mt-10">
+                        <div className="col-span-12 md:col-span-6 lg:col-span-3">
+                          <FormSelect
+                            label="Tipo de Conta"
+                            value={conta.tipoConta}
+                            onChange={(v) => updateConta(idx, "tipoConta", v)}
+                            options={["Conta Corrente", "Conta Poupança (EM BREVE)", "Conta Pagamento (EM BREVE)"]}
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-6 lg:col-span-3">
+                          <FormSelect
+                            label="Banco"
+                            value={conta.banco}
+                            onChange={(v) => updateConta(idx, "banco", v)}
+                            options={bancosList.map(b => `${b.code} - ${b.name}`)}
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-4 lg:col-span-2">
+                          <FormField label="Agência" value={conta.agencia} onChange={(v) => updateConta(idx, "agencia", v.replace(/\D/g, "").substring(0, 4))} placeholder="0000" />
+                        </div>
+                        <div className="col-span-12 md:col-span-5 lg:col-span-3">
+                          <FormField label="Conta" value={conta.conta} onChange={(v) => updateConta(idx, "conta", v.replace(/\D/g, "").substring(0, 12))} placeholder="000000" />
+                        </div>
+                        <div className="col-span-12 md:col-span-3 lg:col-span-1">
+                          <FormField label="Dígito" value={conta.digito} onChange={(v) => updateConta(idx, "digito", v.replace(/\D/g, "").substring(0, 1))} placeholder="X" />
                         </div>
                       </div>
                     </div>
@@ -941,12 +983,12 @@ export default function MaquininhasPage() {
                 onRemove={(idx) => removeDoc("Contrato Assinado", idx)}
               />
               <DocumentUploadCard
-                title="Contrat / Estatuto Social"
+                title="Contrato / Estatuto Social"
                 desc="Cópia do instrumento de constituição ou Ficha Cadastral Jacesp"
-                attached={(formData.documents["Contrat / Estatuto Social"]?.length || 0) > 0}
-                files={formData.documents["Contrat / Estatuto Social"] || []}
-                onUpload={(f) => handleFileUpload("Contrat / Estatuto Social", f)}
-                onRemove={(idx) => removeDoc("Contrat / Estatuto Social", idx)}
+                attached={(formData.documents["Contrato / Estatuto Social"]?.length || 0) > 0}
+                files={formData.documents["Contrato / Estatuto Social"] || []}
+                onUpload={(f) => handleFileUpload("Contrato / Estatuto Social", f)}
+                onRemove={(idx) => removeDoc("Contrato / Estatuto Social", idx)}
               />
               <DocumentUploadCard
                 title="Cartão CNPJ (RCFB)"

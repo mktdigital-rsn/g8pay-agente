@@ -72,6 +72,16 @@ const menuGroups: { label?: string; items: MenuItem[] }[] = [
   }
 ];
 
+const adminMenuGroups: { label?: string; items: MenuItem[] }[] = [
+  {
+    items: [
+      { icon: Home, label: "Início", href: "/dashboard" },
+      { icon: Shield, label: "Compliance E.C.", href: "/dashboard/compliance" },
+      { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
+    ]
+  }
+];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
    const pathname = usePathname();
    const router = useRouter();
@@ -82,9 +92,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const [isLoadingData, setIsLoadingData] = React.useState(true);
    const [expandedMenus, setExpandedMenus] = React.useState<Record<string, boolean>>({});
    const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+   const [userRole, setUserRole] = React.useState("agent");
 
    React.useEffect(() => {
-     menuGroups.forEach(group => {
+     const activeGroups = userRole === "admin" ? adminMenuGroups : menuGroups;
+     activeGroups.forEach(group => {
        group.items.forEach(item => {
          if (item.submenu) {
            const isAnySubActive = item.submenu.some(sub => pathname.startsWith(sub.href));
@@ -94,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
          }
        });
      });
-   }, [pathname]);
+   }, [pathname, userRole]);
    const setGlobalBalance = useSetAtom(balanceAtom);
    const setGlobalBalanceLoading = useSetAtom(isBalanceLoadingAtom);
    const [user, setUser] = useAtom(userAtom);
@@ -102,6 +114,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     const fetchData = async () => {
+      const localRole = typeof window !== "undefined" ? localStorage.getItem("userRole") : "agent";
+      setUserRole(localRole || "agent");
       // Fetch details from localStorage if in bypass/demo mode
       const localName = typeof window !== "undefined" ? localStorage.getItem("userName") : null;
       const signedContractStr = typeof window !== "undefined" ? localStorage.getItem("signedContract") : null;
@@ -346,7 +360,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <AvatarFallback className="bg-neutral-800 text-white font-black uppercase">{cleanName(userName)[0]}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col min-w-0 flex-1 text-left">
-              <span className="text-[9px] text-brand-accent font-black uppercase tracking-[0.2em] mb-0.5">Status Platinum</span>
+              <span className="text-[9px] text-brand-accent font-black uppercase tracking-[0.2em] mb-0.5">{userRole === "admin" ? "Acesso Total" : "Status Platinum"}</span>
               <span className="text-lg font-black text-white leading-tight truncate mb-1.5">{cleanName(userName)}</span>
               
               <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
@@ -375,7 +389,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <nav className="space-y-4">
-            {menuGroups.map((group, groupIdx) => (
+            {(userRole === "admin" ? adminMenuGroups : menuGroups).map((group, groupIdx) => (
               <div key={groupIdx} className="space-y-1">
                 {group.items.map((item) => {
                   const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
@@ -514,21 +528,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-3 sm:gap-8 xl:gap-12">
             {/* Balance Section */}
-            <div className={`flex flex-col items-end justify-center h-12 border-r pr-4 sm:pr-8 xl:pr-12 ${
-              currentBrand.id !== "g8" ? "border-white/5" : "border-white/10"
-            }`}>
-              <span className="text-[10px] text-white/60 font-black uppercase tracking-[0.2em] mb-2 leading-none">Comissões</span>
-              <div className="flex items-center gap-4">
-                {isLoadingData ? (
-                  <div className="h-6 w-32 bg-white/5 animate-pulse rounded-md" />
-                ) : (
-                  <span className="text-lg sm:text-2xl xl:text-3xl font-black text-white font-mono tracking-tighter">{balance}</span>
-                )}
-                <button onClick={() => window.location.reload()} className="group/sync">
-                   <RotateCw className="h-4 w-4 text-brand-accent group-hover/sync:rotate-180 transition-transform duration-700" />
-                </button>
+            {userRole !== "admin" && (
+              <div className={`flex flex-col items-end justify-center h-12 border-r pr-4 sm:pr-8 xl:pr-12 ${
+                currentBrand.id !== "g8" ? "border-white/5" : "border-white/10"
+              }`}>
+                <span className="text-[10px] text-white/60 font-black uppercase tracking-[0.2em] mb-2 leading-none">Comissões</span>
+                <div className="flex items-center gap-4">
+                  {isLoadingData ? (
+                    <div className="h-6 w-32 bg-white/5 animate-pulse rounded-md" />
+                  ) : (
+                    <span className="text-lg sm:text-2xl xl:text-3xl font-black text-white font-mono tracking-tighter">{balance}</span>
+                  )}
+                  <button onClick={() => window.location.reload()} className="group/sync">
+                     <RotateCw className="h-4 w-4 text-brand-accent group-hover/sync:rotate-180 transition-transform duration-700" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Profile Section */}
             <div className="flex items-center gap-3 sm:gap-6 xl:gap-8 relative">
@@ -557,7 +573,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <p className="text-base font-black text-white group-hover:text-brand-accent transition-colors leading-none truncate max-w-[200px] xl:max-w-[300px]">
                     {cleanName(userName)}
                   </p>
-                  <p className="text-[10px] text-white/40 uppercase font-black tracking-widest mt-1.5 leading-none">PLATINUM ELITE</p>
+                  <p className="text-[10px] text-white/40 uppercase font-black tracking-widest mt-1.5 leading-none">{userRole === "admin" ? "ADMINISTRADOR" : "PLATINUM ELITE"}</p>
                 </div>
                 <div className="relative">
                   <div className="absolute -inset-1 bg-gradient-to-r from-brand-accent to-brand-secondary rounded-md blur opacity-0 group-hover:opacity-20 transition-opacity" />

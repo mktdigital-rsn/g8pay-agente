@@ -408,6 +408,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
       localStorage.setItem("userEmail", agent.email);
       localStorage.setItem("userCpf", agent.cpf);
       localStorage.setItem("userWhatsapp", agent.whatsapp);
+      localStorage.setItem("userRole", "agent");
 
       // Set session expiration to 15 mins from now
       localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
