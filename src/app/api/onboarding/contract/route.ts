@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
               page_width: 794,
               page_height: 1123,
               position_x: 225,
-              position_y: 635,
+              position_y: 675,
               type: 0 // 0 = Signature
             }
           ]
