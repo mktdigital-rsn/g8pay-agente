@@ -28,7 +28,8 @@ import {
   Store,
   FolderOpen,
   Menu,
-  X
+  X,
+  Users
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -62,7 +63,8 @@ const menuGroups: { label?: string; items: MenuItem[] }[] = [
         label: "Cadastro", 
         href: "#",
         submenu: [
-          { icon: Store, label: "E.C - Estabelecimento Comercial", href: "/dashboard/maquininhas" }
+          { icon: Store, label: "E.C - Estabelecimento Comercial", href: "/dashboard/maquininhas" },
+          { icon: Users, label: "Meus Clientes", href: "/dashboard/meus-clientes" }
         ]
       },
       { icon: FileText, label: "Contratos", href: "/dashboard/contratos" },

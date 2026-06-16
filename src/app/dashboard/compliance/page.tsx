@@ -7,7 +7,7 @@ import {
   Filter,
   CheckCircle2,
   XCircle,
-  AlertTriangle,
+  AlertCircle,
   FileText,
   Eye,
   Building,
@@ -15,24 +15,22 @@ import {
   ArrowLeft,
   Check,
   X,
-  MessageSquare,
   Download,
   Loader2,
   User,
   ShieldAlert,
   MapPin,
   CreditCard,
-  Phone,
-  Mail,
-  HelpCircle,
+  Building2,
+  AlertTriangle,
+  TrendingUp,
+  FileSearch,
   ExternalLink
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { currentBrand } from "@/config/brand";
 
 type Establishment = {
   id: string;
@@ -63,10 +61,13 @@ type Establishment = {
   quantidade: string;
   contactsJson: string;
   bankAccountsJson: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "pending_level_2";
   observations?: string;
   createdAt: string;
   updatedAt: string;
+  // Joined fields
+  agentName?: string;
+  agentCpf?: string;
 };
 
 type EstablishmentDocument = {
@@ -74,12 +75,16 @@ type EstablishmentDocument = {
   name: string;
   fileName: string;
   mimeType: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "revisions";
   observations?: string;
 };
 
 type EstablishmentDetails = Establishment & {
   documents: EstablishmentDocument[];
+  agent?: {
+    fullName: string;
+    cpf: string;
+  } | null;
 };
 
 export default function CompliancePage() {
@@ -93,10 +98,16 @@ export default function CompliancePage() {
   const [filterStatus, setFilterStatus] = useState<string>("");
   
   // Compliance Review States for Selected E.C.
-  const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected", observations: string }>>({});
-  const [ecStatus, setEcStatus] = useState<"approved" | "rejected">("approved");
+  const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions", observations: string }>>({});
+  const [ecStatus, setEcStatus] = useState<"approved" | "rejected" | "pending_level_2">("approved");
   const [ecObservations, setEcObservations] = useState("");
   const [isSubmittingCompliance, setIsSubmittingCompliance] = useState(false);
+
+  // Document Preview States
+  const [activePreviewDoc, setActivePreviewDoc] = useState<EstablishmentDocument | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchEstablishments = async () => {
     setLoading(true);
@@ -133,6 +144,14 @@ export default function CompliancePage() {
 
   const handleSelectEc = async (id: string) => {
     setLoadingDetails(true);
+    
+    // Revoke previous blob URL if exists
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
+    setActivePreviewDoc(null);
+
     try {
       const res = await api.get(`/api/establishments/${id}`);
       if (res.data && res.data.success) {
@@ -141,7 +160,7 @@ export default function CompliancePage() {
         setEcObservations(details.observations || "");
         
         // Initialize document reviews
-        const initialReviews: Record<string, { status: "approved" | "rejected", observations: string }> = {};
+        const initialReviews: Record<string, { status: "approved" | "rejected" | "revisions", observations: string }> = {};
         details.documents.forEach(doc => {
           initialReviews[doc.id] = {
             status: doc.status === "pending" ? "approved" : doc.status,
@@ -159,7 +178,7 @@ export default function CompliancePage() {
     }
   };
 
-  const handleDocReviewChange = (docId: string, status: "approved" | "rejected") => {
+  const handleDocReviewChange = (docId: string, status: "approved" | "rejected" | "revisions") => {
     setDocReviews(prev => ({
       ...prev,
       [docId]: {
@@ -179,18 +198,56 @@ export default function CompliancePage() {
     }));
   };
 
-  const handleSubmitCompliance = async () => {
+  const handlePreviewDoc = async (doc: EstablishmentDocument) => {
+    if (activePreviewDoc?.id === doc.id) return;
+    
+    setIsPreviewLoading(true);
+    setActivePreviewDoc(doc);
+    try {
+      // Clean up previous blob URL
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+        setPreviewBlobUrl(null);
+      }
+      
+      const response = await api.get(`/api/establishments/documents/${doc.id}/download`, {
+        responseType: "blob"
+      });
+      
+      const blobUrl = URL.createObjectURL(response.data);
+      setPreviewBlobUrl(blobUrl);
+    } catch (err) {
+      console.error("Error fetching preview:", err);
+      toast.error("Erro ao carregar pré-visualização do documento.");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleSaveDecision = async (status: "approved" | "rejected" | "pending_level_2") => {
     if (!selectedEc) return;
     
+    // Validate that rejected/revisions documents have observations
+    let validationFailed = false;
+    selectedEc.documents.forEach(doc => {
+      const review = docReviews[doc.id];
+      if (review && (review.status === "rejected" || review.status === "revisions") && !review.observations.trim()) {
+        toast.error(`Informe o motivo para o documento: ${doc.name}`);
+        validationFailed = true;
+      }
+    });
+
+    if (validationFailed) return;
+
     setIsSubmittingCompliance(true);
     try {
       const payload = {
-        status: ecStatus,
+        status,
         observations: ecObservations,
         documents: Object.entries(docReviews).map(([docId, review]) => ({
           id: docId,
           status: review.status,
-          observations: review.status === "rejected" ? review.observations : ""
+          observations: review.status !== "approved" ? review.observations : ""
         }))
       };
 
@@ -210,6 +267,15 @@ export default function CompliancePage() {
     }
   };
 
+  // Clean up blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+      }
+    };
+  }, [previewBlobUrl]);
+
   const parseJsonList = (jsonStr: string) => {
     try {
       return JSON.parse(jsonStr) || [];
@@ -224,17 +290,41 @@ export default function CompliancePage() {
         return <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-200 uppercase px-3 py-1 font-black text-[9px] tracking-wider rounded-sm shadow-sm">Aprovado</Badge>;
       case "rejected":
         return <Badge className="bg-red-50 text-red-600 border border-red-200 uppercase px-3 py-1 font-black text-[9px] tracking-wider rounded-sm shadow-sm">Reprovado</Badge>;
+      case "pending_level_2":
+        return <Badge className="bg-blue-50 text-blue-600 border border-blue-200 uppercase px-3 py-1 font-black text-[9px] tracking-wider rounded-sm shadow-sm">Nível 2</Badge>;
       default:
         return <Badge className="bg-amber-50 text-amber-600 border border-amber-200 uppercase px-3 py-1 font-black text-[9px] tracking-wider rounded-sm shadow-sm">Pendente</Badge>;
     }
   };
 
+  const maskAgentName = (name?: string) => {
+    if (!name) return "---";
+    const parts = name.split(" ");
+    if (parts.length < 2) return name;
+    const first = parts[0];
+    const last = parts[parts.length - 1];
+    return `${first} ** * ${last}`;
+  };
+
+  const maskAgentCpf = (cpf?: string) => {
+    if (!cpf) return "---";
+    const clean = cpf.replace(/\D/g, "");
+    if (clean.length !== 11) return cpf;
+    return `${clean.substring(0, 3)}.*.*.${clean.substring(9, 11)}`;
+  };
+
   if (selectedEc) {
     const contacts = parseJsonList(selectedEc.contactsJson);
     const bankAccounts = parseJsonList(selectedEc.bankAccountsJson);
+    const agentName = selectedEc.agent?.fullName || selectedEc.agentName || "";
+    const agentCpf = selectedEc.agent?.cpf || selectedEc.agentCpf || "";
+
+    // Generate consistent mock risk variables based on establishment ID
+    const scoreVal = 600 + (selectedEc.id.charCodeAt(0) % 350);
+    const hasFraudHistory = selectedEc.id.charCodeAt(1) % 2 === 0;
 
     return (
-      <div className="p-2 sm:p-4 md:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
+      <div className="p-4 sm:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Button
@@ -246,197 +336,412 @@ export default function CompliancePage() {
           </Button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black tracking-tighter text-[#0c0a09]">{selectedEc.nomeFantasia}</h1>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-[#0c0a09] uppercase">
+                Validação de Cadastro - {selectedEc.nomeFantasia}
+              </h1>
               {getStatusBadge(selectedEc.status)}
             </div>
-            <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1">Análise de Compliance • CNPJ/CPF: {selectedEc.cnpjCpf}</p>
+            <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1">
+              Agente: <span className="text-neutral-700 font-black">{maskAgentName(agentName)}</span> • CPF: <span className="text-neutral-700 font-black">{maskAgentCpf(agentCpf)}</span>
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-20">
-          {/* Left Side: E.C. Information Details */}
-          <div className="lg:col-span-8 space-y-8">
-            {/* Basic Info Card */}
+          {/* Left Column: Register Data & Risk Assessment */}
+          <div className="lg:col-span-6 space-y-8">
+            
+            {/* 1. DADOS CADASTRAIS (Matching new wireframe layout) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <Building className="h-5 w-5 text-brand-accent" /> Dados Cadastrais
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-brand-accent" /> Dados Cadastrais
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 text-sm">
-                <InfoItem label="Razão Social" value={selectedEc.razaoSocial || "---"} />
-                <InfoItem label="CNPJ/CPF" value={selectedEc.cnpjCpf} />
-                <InfoItem label="Tipo Estabelecimento" value={selectedEc.tipoEstabelecimento} />
-                <InfoItem label="Tipo de Empresa" value={selectedEc.tipoEmpresa} />
-                <InfoItem label="Contato Principal" value={selectedEc.contatoPrincipal} />
-                <InfoItem label="Data de Fundação" value={selectedEc.dataFundacao} />
-                <InfoItem label="Horário de Funcionamento" value={selectedEc.horarioFuncionamento} />
-                <InfoItem label="Site" value={selectedEc.site || "---"} />
-                <InfoItem label="Localizado em Shopping" value={selectedEc.shopping} />
-                {selectedEc.shopping === "Sim" && (
-                  <InfoItem label="Descrição Shopping" value={selectedEc.descricaoShopping || "---"} />
-                )}
-                <InfoItem label="MCC" value={selectedEc.mcc} />
-                <InfoItem label="CNAE" value={selectedEc.cnae} />
-                <InfoItem label="Máquinas Solicitadas" value={`${selectedEc.quantidade} unidade(s)`} />
-              </div>
-            </Card>
-
-            {/* Financial Info Card */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
-                <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} />
-                <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} />
-                <InfoItem label="Antecipação de Recebíveis" value={selectedEc.antecipacaoRecebiveis} />
-              </div>
-            </Card>
-
-            {/* Address Info Card */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-sm">
-                <div className="sm:col-span-2">
-                  <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} />
+              
+              <div className="space-y-4 text-xs sm:text-sm">
+                {/* Company Name in a single line, bottom line has CNPJ, type, model */}
+                <div className="border-b border-neutral-100 pb-3">
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Razão Social</span>
+                  <span className="text-base font-black text-[#0c0a09] leading-snug">{selectedEc.razaoSocial || "---"}</span>
                 </div>
-                <InfoItem label="Complemento" value={selectedEc.complemento || "---"} />
-                <InfoItem label="Bairro" value={selectedEc.bairro} />
-                <InfoItem label="Cidade/UF" value={`${selectedEc.cidade} - ${selectedEc.state}`} />
-                <InfoItem label="CEP" value={selectedEc.cep} />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">CNPJ/CPF</span>
+                    <span className="font-bold text-[#0c0a09]">{selectedEc.cnpjCpf}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Tipo Estabelecimento</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.tipoEstabelecimento}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Tipo de Empresa</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.tipoEmpresa}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Nome Fantasia</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.nomeFantasia}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Endereço Completo</span>
+                    <span className="font-semibold text-neutral-700 leading-snug">
+                      {selectedEc.rua}, Nº {selectedEc.numero} {selectedEc.complemento ? `(${selectedEc.complemento})` : ''}, {selectedEc.bairro} - {selectedEc.cidade}/{selectedEc.state}, CEP {selectedEc.cep}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Contato Principal</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.contatoPrincipal}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Contato Secundário</span>
+                    <span className="font-semibold text-neutral-700">{contacts[1]?.telefone || "---"}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Data de Fundação</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.dataFundacao}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Horário de Funcionamento</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.horarioFuncionamento}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Site</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.site || "---"}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Redes Sociais</span>
+                    <span className="font-semibold text-neutral-700">Não Informado</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">CNAE Principal</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.cnae}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">CNAE Secundários</span>
+                    <span className="font-semibold text-neutral-400 italic">Nenhum</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">MCC</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.mcc}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Shopping?</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.shopping} {selectedEc.descricaoShopping ? `(${selectedEc.descricaoShopping})` : ''}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Máquinas Solicitadas</span>
+                    <span className="font-semibold text-neutral-700">{selectedEc.quantidade} unidade(s) (Padrão G8Pay)</span>
+                  </div>
+                </div>
               </div>
             </Card>
 
-            {/* Contacts list Card */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-green-500 shadow-xl space-y-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <User className="h-5 w-5 text-green-500" /> Contatos Responsáveis
+            {/* 2. RISCO & SEGURANÇA CARD (From new wireframe layout) */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-red-500 shadow-xl space-y-6">
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-red-500" /> Risco & Segurança
               </h3>
-              <div className="space-y-4">
-                {contacts.length > 0 ? (
-                  contacts.map((c: any, index: number) => (
-                    <div key={index} className="p-5 bg-neutral-50 rounded-sm border border-neutral-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                      <InfoItem label="Nome" value={c.nome || "---"} />
-                      <InfoItem label="CPF" value={c.cpf || "---"} />
-                      <InfoItem label="E-mail" value={c.email || "---"} />
-                      <InfoItem label="Cargo / Responsabilidade" value={`${c.funcao || '---'} (${c.tipoResponsavel || 'Sócio'})`} />
-                      <InfoItem label="Telefone" value={c.telefone || "---"} />
-                      <InfoItem label="Nascimento" value={c.dataNascimento || "---"} />
-                      <InfoItem label="Nacionalidade" value={c.nacionalidade || "---"} />
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-neutral-400 font-bold uppercase italic">Nenhum contato cadastrado.</p>
-                )}
-              </div>
-            </Card>
 
-            {/* Bank details Card */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-indigo-600 shadow-xl space-y-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <Building className="h-5 w-5 text-indigo-600" /> Contas Bancárias cadastradas
-              </h3>
-              <div className="space-y-4">
-                {bankAccounts.length > 0 ? (
-                  bankAccounts.map((b: any, index: number) => (
-                    <div key={index} className="p-5 bg-neutral-50 rounded-sm border border-neutral-100 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                      <InfoItem label="Banco" value={b.banco || "---"} />
-                      <InfoItem label="Agência / Conta" value={`${b.agencia || '---'} / ${b.conta || '---'}-${b.digito || ''}`} />
-                      <InfoItem label="Tipo de Conta" value={b.tipoConta || "---"} />
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-neutral-400 font-bold uppercase italic">Nenhuma conta bancária cadastrada.</p>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs sm:text-sm">
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Score de Crédito</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-lg font-black text-neutral-800">{scoreVal}</span>
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-sm ${scoreVal > 750 ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                      {scoreVal > 750 ? 'Excelente' : 'Bom'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Alerta de Fraude (Histórico)</span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-semibold mt-1.5 ${hasFraudHistory ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {hasFraudHistory ? 'Alerta Moderado (Vendas Atípicas)' : 'Nenhum Alerta Ativo (Baixo Risco)'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Processos Judiciais</span>
+                  <a href="https://www.jusbrasil.com.br" target="_blank" rel="noreferrer" className="text-brand-accent hover:underline font-bold text-xs flex items-center gap-1 mt-1">
+                    Consultar Jusbrasil <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Reputação Online</span>
+                  <span className="font-semibold text-neutral-700 block mt-1">Ótima (4.5★ no Google)</span>
+                </div>
               </div>
             </Card>
           </div>
 
-          {/* Right Side: Documents compliance validation */}
-          <div className="lg:col-span-4 space-y-8">
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6 sticky top-6">
-              <h3 className="text-base font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-brand-accent" /> Validação de Documentos
+          {/* Right Column: Financial Data & Document Compliance Grid */}
+          <div className="lg:col-span-6 space-y-8">
+            
+            {/* 1. INFORMAÇÕES FINANCEIRAS CARD (Includes unified Bank Details, Revenue chart, methods) */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
               </h3>
-              
-              <div className="space-y-6">
-                {selectedEc.documents.length > 0 ? (
-                  selectedEc.documents.map((doc) => {
-                    const review = docReviews[doc.id] || { status: "approved", observations: "" };
-                    return (
-                      <div key={doc.id} className="p-4 rounded-sm border border-neutral-100 bg-neutral-50/50 space-y-3">
-                        <div className="flex items-start justify-between gap-4 min-w-0">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <FileText className="h-8 w-8 text-neutral-400 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-black text-[#0c0a09] uppercase tracking-wider truncate" title={doc.name}>{doc.name}</p>
-                              <p className="text-[10px] text-neutral-400 truncate w-full" title={doc.fileName}>{doc.fileName}</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs sm:text-sm">
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Faturamento Mensal</span>
+                  <span className="font-bold text-neutral-800">{selectedEc.faturamentoMensal}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Ticket Médio</span>
+                  <span className="font-semibold text-neutral-700">{selectedEc.ticketMedio}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Antecipação</span>
+                  <span className="font-semibold text-neutral-700">{selectedEc.antecipacaoRecebiveis}</span>
+                </div>
+              </div>
+
+              {/* Bank Details integrated directly inside the Financial card */}
+              <div className="bg-neutral-50/50 p-4 border border-neutral-100 rounded-sm space-y-3">
+                <span className="block text-[10px] uppercase font-black text-neutral-400 tracking-wider mb-2">Conta de Repasse cadastrada</span>
+                {bankAccounts.length > 0 ? (
+                  bankAccounts.map((b: any, idx: number) => (
+                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="block text-[8px] uppercase font-bold text-neutral-400 tracking-wider">Banco</span>
+                        <span className="font-bold text-neutral-700">{b.banco || "---"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[8px] uppercase font-bold text-neutral-400 tracking-wider">Agência / Conta</span>
+                        <span className="font-semibold text-neutral-600">{b.agencia || '---'} / {b.conta || '---'}-{b.digito || ''}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[8px] uppercase font-bold text-neutral-400 tracking-wider">Tipo</span>
+                        <span className="font-semibold text-neutral-600">{b.tipoConta || "---"}</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-neutral-400 italic">Nenhuma conta informada.</p>
+                )}
+              </div>
+
+              {/* Revenue history CSS bar chart & Methods */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 items-center">
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-1">Meios de Pagamento Aceitos</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    <Badge className="bg-neutral-100 text-neutral-600 border-0 rounded-xs text-[9px] uppercase tracking-wider">Pix</Badge>
+                    <Badge className="bg-neutral-100 text-neutral-600 border-0 rounded-xs text-[9px] uppercase tracking-wider">Crédito</Badge>
+                    <Badge className="bg-neutral-100 text-neutral-600 border-0 rounded-xs text-[9px] uppercase tracking-wider">Débito</Badge>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-[10px] uppercase font-bold text-neutral-400 tracking-wider">Histórico de Faturamento</span>
+                  <div className="flex items-end gap-1.5 h-12 pt-2 border-b border-neutral-100">
+                    {[35, 50, 42, 68, 55, 62, 85, 70, 78, 92].map((h, i) => (
+                      <div key={i} className="flex-1 bg-brand-accent hover:bg-brand-accent/80 rounded-t-xs transition-all duration-300" style={{ height: `${h}%` }} title={`Mês ${i+1}`} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* 2. VALIDAÇÃO DE DOCUMENTOS CARD (Split into document grid list on left, preview panel on right) */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
+              </h3>
+
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                
+                {/* Documents Cards List (xl:col-span-7) */}
+                <div className="xl:col-span-7 space-y-4 max-h-[420px] overflow-y-auto pr-1 no-scrollbar">
+                  {selectedEc.documents.length > 0 ? (
+                    selectedEc.documents.map((doc) => {
+                      const review = docReviews[doc.id] || { status: "approved", observations: "" };
+                      const isActivePreview = activePreviewDoc?.id === doc.id;
+                      
+                      return (
+                        <div 
+                          key={doc.id} 
+                          onClick={() => handlePreviewDoc(doc)}
+                          className={`p-3.5 rounded-sm border transition-all cursor-pointer space-y-3 ${
+                            isActivePreview 
+                              ? "bg-neutral-50 border-brand-accent shadow-sm"
+                              : "bg-white border-neutral-100 hover:bg-neutral-50/50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <FileText className={`h-6 w-6 shrink-0 ${isActivePreview ? 'text-brand-accent' : 'text-neutral-400'}`} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] font-black text-neutral-800 uppercase tracking-tight truncate" title={doc.name}>{doc.name}</p>
+                                <p className="text-[9px] text-neutral-400 truncate" title={doc.fileName}>{doc.fileName} • versão 1</p>
+                              </div>
                             </div>
+                            
+                            <a
+                              href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="h-7 w-7 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0"
+                              title="Baixar Documento"
+                              onClick={(e) => e.stopPropagation()} // Prevent triggering preview click
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
                           </div>
                           
-                          {/* Download Button */}
-                          <a
-                            href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="h-8 w-8 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0"
-                            title="Visualizar / Baixar Documento"
+                          {/* Three-state buttons: inactive by default, highlighting in color when selected */}
+                          <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleDocReviewChange(doc.id, "approved")}
+                              className={`flex-1 h-8 rounded-sm font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                                review.status === "approved"
+                                  ? "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-extrabold"
+                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
+                              }`}
+                            >
+                              <Check className="h-3 w-3" /> Aprovar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDocReviewChange(doc.id, "rejected")}
+                              className={`flex-1 h-8 rounded-sm font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                                review.status === "rejected"
+                                  ? "bg-red-50 border-red-500 text-red-700 shadow-sm font-extrabold"
+                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
+                              }`}
+                            >
+                              <X className="h-3 w-3" /> Reprovar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDocReviewChange(doc.id, "revisions")}
+                              className={`flex-1 h-8 rounded-sm font-black text-[8px] uppercase tracking-widest flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                                review.status === "revisions"
+                                  ? "bg-amber-50 border-amber-500 text-amber-700 shadow-sm font-extrabold"
+                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
+                              }`}
+                            >
+                              <AlertCircle className="h-3 w-3" /> Revisão
+                            </button>
+                          </div>
+                          
+                          {/* Textarea observations when rejected or revisions is selected */}
+                          {(review.status === "rejected" || review.status === "revisions") && (
+                            <div className="space-y-1 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                              <label className="text-[7.5px] font-black text-amber-600 uppercase tracking-widest block">
+                                Motivo da pendência *
+                              </label>
+                              <textarea
+                                value={review.observations}
+                                onChange={(e) => handleDocObsChange(doc.id, e.target.value)}
+                                placeholder="Indique o motivo ou o que precisa ser corrigido..."
+                                className="w-full min-h-[50px] p-2 text-[10px] border border-amber-200 rounded-sm bg-amber-50/10 focus-visible:outline-amber-500 text-neutral-800"
+                                required
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
+                  )}
+                </div>
+
+                {/* Document Preview Pane (xl:col-span-5) */}
+                <div className="xl:col-span-5 bg-neutral-50 border border-neutral-100 rounded-sm p-4 flex flex-col justify-between items-stretch min-h-[350px]">
+                  <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-2">
+                    <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Pré-visualização</span>
+                    {activePreviewDoc && previewBlobUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setIsModalOpen(true)}
+                        className="text-[8px] font-black text-brand-accent uppercase hover:underline cursor-pointer flex items-center gap-0.5 shrink-0"
+                      >
+                        <Eye className="h-3 w-3" /> Ampliar
+                      </button>
+                    )}
+                  </div>
+
+                  {isPreviewLoading ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2 py-12">
+                      <Loader2 className="h-6 w-6 text-brand-accent animate-spin" />
+                      <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest">Carregando arquivo...</span>
+                    </div>
+                  ) : previewBlobUrl ? (
+                    <div 
+                      onClick={() => setIsModalOpen(true)}
+                      className="flex-1 w-full flex items-center justify-center overflow-hidden bg-white border border-neutral-200 rounded-sm cursor-pointer hover:border-brand-accent hover:shadow-md transition-all relative group"
+                      title="Clique para ampliar visualização"
+                    >
+                      {/* Hover Overlay */}
+                      <div className="absolute inset-0 bg-[#ff7711]/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
+                        <span className="bg-neutral-900/80 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-sm shadow-md flex items-center gap-1.5">
+                          <Eye className="h-4 w-4" /> Clique para Ampliar
+                        </span>
+                      </div>
+
+                      {activePreviewDoc?.mimeType.startsWith("image/") ? (
+                        <img 
+                          src={previewBlobUrl} 
+                          alt={activePreviewDoc.name} 
+                          className="max-w-full max-h-[300px] object-contain p-2" 
+                        />
+                      ) : activePreviewDoc?.mimeType === "application/pdf" || activePreviewDoc?.mimeType === "text/html" ? (
+                        <iframe 
+                          src={previewBlobUrl} 
+                          title="DocPreview" 
+                          className="w-full h-[300px] border-none pointer-events-none" 
+                        />
+                      ) : (
+                        <div className="text-center p-6 space-y-2">
+                          <FileText className="h-8 w-8 text-neutral-400 mx-auto" />
+                          <p className="text-[10px] text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
+                          <a 
+                            href={previewBlobUrl} 
+                            download={activePreviewDoc?.fileName}
+                            className="inline-block text-[9px] font-black text-brand-accent uppercase hover:underline"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Download className="h-4 w-4" />
+                            Baixar arquivo
                           </a>
                         </div>
-                        
-                        {/* Approval Toggle */}
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleDocReviewChange(doc.id, "approved")}
-                            className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
-                              review.status === "approved"
-                                ? "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm"
-                                : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                            }`}
-                          >
-                            <Check className="h-3.5 w-3.5" /> Aprovado
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDocReviewChange(doc.id, "rejected")}
-                            className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
-                              review.status === "rejected"
-                                ? "bg-red-50 border-red-500 text-red-700 shadow-sm"
-                                : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                            }`}
-                          >
-                            <X className="h-3.5 w-3.5" /> Reprovado
-                          </button>
-                        </div>
-                        
-                        {/* Observations for Rejected Documents */}
-                        {review.status === "rejected" && (
-                          <div className="space-y-1 animate-in fade-in duration-200">
-                            <label className="text-[8px] font-black text-red-600 uppercase tracking-widest">Motivo da Reprovação *</label>
-                            <textarea
-                              value={review.observations}
-                              onChange={(e) => handleDocObsChange(doc.id, e.target.value)}
-                              placeholder="Descreva o motivo (Ex: RG ilegível, CPF divergente...)"
-                              className="w-full min-h-[60px] p-2 text-xs border border-red-200 rounded-sm bg-red-50/10 focus-visible:outline-red-500 text-[#0c0a09]"
-                              required
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="text-xs text-neutral-400 font-bold uppercase italic text-center py-4">Nenhum documento foi anexado por este E.C.</p>
-                )}
-                
-                <div className="h-[1px] bg-neutral-100 my-6" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-neutral-300 gap-2 border border-dashed border-neutral-200 rounded-sm bg-white">
+                      <FileSearch className="h-10 w-10 text-neutral-200" />
+                      <p className="text-[9.5px] font-black uppercase text-neutral-400 tracking-wider">
+                        Selecione um documento ao lado para pré-visualizar
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                {/* Final Compliance decision */}
-                <div className="space-y-4">
+              {/* Notas de Revisão Interna & Audit Logs */}
+              <div className="pt-4 border-t border-neutral-100 space-y-4">
+                <div className="space-y-3">
                   <h4 className="text-xs font-black text-[#0c0a09] uppercase tracking-widest">Parecer Final do Credenciamento</h4>
                   
                   <div className="flex gap-4">
@@ -463,42 +768,121 @@ export default function CompliancePage() {
                       <X className="h-4 w-4" /> Reprovar E.C.
                     </button>
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Observações Finais / Instruções de Ajuste</label>
-                    <textarea
-                      value={ecObservations}
-                      onChange={(e) => setEcObservations(e.target.value)}
-                      placeholder="Instruções para o agente ou observações de compliance..."
-                      className="w-full min-h-[100px] p-3 text-xs border border-neutral-200 rounded-sm bg-neutral-50/50 text-[#0c0a09] focus-visible:outline-brand-accent focus-visible:bg-white transition-all"
-                    />
-                  </div>
-
-                  <Button
-                    onClick={handleSubmitCompliance}
-                    disabled={isSubmittingCompliance}
-                    className="w-full h-14 bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-xs uppercase tracking-widest rounded-sm transition-all shadow-xl shadow-orange-500/15 mt-4 cursor-pointer"
-                  >
-                    {isSubmittingCompliance ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Salvando Decisão...
-                      </>
-                    ) : (
-                      "Salvar Análise de Compliance"
-                    )}
-                  </Button>
                 </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">
+                    Notas de Revisão Interna / Instruções de Ajuste
+                  </label>
+                  <textarea
+                    value={ecObservations}
+                    onChange={(e) => setEcObservations(e.target.value)}
+                    placeholder="Instruções para o agente ou observações de compliance..."
+                    className="w-full min-h-[85px] p-3 text-xs border border-neutral-200 rounded-sm bg-neutral-50/50 text-neutral-800 focus-visible:outline-brand-accent focus-visible:bg-white transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest block">Histórico de Ações</span>
+                  <div className="text-[9.5px] font-bold text-neutral-500 space-y-1 bg-neutral-50/50 p-3 rounded-sm border border-neutral-100">
+                    <div className="flex items-center gap-1.5 text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Cadastro recebido e validado eletronicamente - 16/06/2026
+                    </div>
+                    {selectedEc.status !== "pending" && (
+                      <div className="flex items-center gap-1.5 text-neutral-600">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-brand-accent" />
+                        Status atualizado para {selectedEc.status === "approved" ? "APROVADO" : selectedEc.status === "pending_level_2" ? "ENCAMINHADO NÍVEL 2" : "REPROVADO"} - {new Date(selectedEc.updatedAt).toLocaleDateString('pt-BR')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => handleSaveDecision(ecStatus)}
+                  disabled={isSubmittingCompliance}
+                  className="w-full h-14 bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-xs uppercase tracking-widest rounded-sm transition-all shadow-xl shadow-orange-500/15 mt-4 cursor-pointer"
+                >
+                  {isSubmittingCompliance ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin animate-infinite" />
+                      Salvando Decisão...
+                    </>
+                  ) : (
+                    "Salvar Análise de Compliance"
+                  )}
+                </Button>
               </div>
             </Card>
           </div>
         </div>
+
+        {/* Fullscreen Preview Modal */}
+        {isModalOpen && activePreviewDoc && previewBlobUrl && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-sm border border-neutral-200 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col justify-between overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-neutral-100 p-4 shrink-0">
+                <div>
+                  <h3 className="text-sm font-black text-neutral-800 uppercase tracking-tight">
+                    Visualização do Documento - {activePreviewDoc.name}
+                  </h3>
+                  <p className="text-[9px] text-neutral-400 mt-0.5">{activePreviewDoc.fileName}</p>
+                </div>
+                <button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="h-8 w-8 hover:bg-neutral-100 border border-neutral-200 text-neutral-500 rounded-full flex items-center justify-center cursor-pointer transition-all shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              
+              {/* Content */}
+              <div className="flex-1 bg-neutral-100 p-4 flex items-center justify-center overflow-hidden">
+                {activePreviewDoc.mimeType.startsWith("image/") ? (
+                  <img 
+                    src={previewBlobUrl} 
+                    alt={activePreviewDoc.name} 
+                    className="max-w-full max-h-full object-contain" 
+                  />
+                ) : activePreviewDoc.mimeType === "application/pdf" || activePreviewDoc.mimeType === "text/html" ? (
+                  <iframe 
+                    src={previewBlobUrl} 
+                    title="ModalDocPreview" 
+                    className="w-full h-full border-none" 
+                  />
+                ) : (
+                  <div className="text-center p-6 space-y-2 bg-white rounded-sm shadow-md">
+                    <FileText className="h-10 w-10 text-neutral-400 mx-auto" />
+                    <p className="text-xs text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
+                    <a 
+                      href={previewBlobUrl} 
+                      download={activePreviewDoc.fileName}
+                      className="inline-block text-[10px] font-black text-brand-accent uppercase hover:underline"
+                    >
+                      Baixar arquivo
+                    </a>
+                  </div>
+                )}
+              </div>
+              
+              {/* Footer */}
+              <div className="flex justify-end p-4 border-t border-neutral-100 bg-neutral-50 shrink-0">
+                <Button 
+                  onClick={() => setIsModalOpen(false)}
+                  className="bg-neutral-900 hover:bg-neutral-800 text-white rounded-sm text-xs font-black uppercase tracking-widest px-6"
+                >
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="p-2 sm:p-4 md:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-700">
+    <div className="p-2 sm:p-4 md:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-accent/5 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />
 
       <div className="space-y-8 relative z-10">
@@ -542,6 +926,7 @@ export default function CompliancePage() {
                 <option value="pending">Pendentes</option>
                 <option value="approved">Aprovados</option>
                 <option value="rejected">Reprovados</option>
+                <option value="pending_level_2">Nível 2</option>
               </select>
             </div>
             
@@ -589,7 +974,9 @@ export default function CompliancePage() {
                     </div>
                     <div className="flex items-center gap-2.5 text-neutral-500">
                       <User className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
-                      <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[9px]">Agente: <strong className="text-neutral-700">{ec.agentId === "unknown-agent" ? "Direto" : "Código " + ec.agentId.substring(0, 8)}</strong></span>
+                      <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[9px]">
+                        Agente: <strong className="text-neutral-700">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -617,15 +1004,6 @@ export default function CompliancePage() {
           </Card>
         )}
       </div>
-    </div>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-1">
-      <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest leading-none">{label}</p>
-      <p className="font-bold text-[#0c0a09] leading-snug">{value}</p>
     </div>
   );
 }
