@@ -332,9 +332,9 @@ export default function CompliancePage() {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* Left Column: Register Data, Address & Risk Assessment */}
-          <div className="lg:col-span-6 space-y-8">
+          <div className="lg:col-span-6 space-y-8 flex flex-col h-full">
             
             {/* 1. DADOS CADASTRAIS (Compact, no address, styled with icons/slots) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
@@ -373,18 +373,18 @@ export default function CompliancePage() {
               </div>
             </Card>
             {/* 2. ENDEREÇO DE INSTALAÇÃO (Isolated in a new Card below Dados Cadastrais) */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6">
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6 flex flex-col flex-1">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
               </h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
-                <InfoItem label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
-                <InfoItem label="Bairro" value={selectedEc.bairro} icon={MapPin} />
-                <InfoItem label="Cidade" value={selectedEc.cidade} icon={Map} />
-                <InfoItem label="Estado / UF" value={selectedEc.state} icon={Map} />
-                <InfoItem label="CEP" value={selectedEc.cep} icon={Hash} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 content-start">
+                <InfoItem size="lg" label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
+                <InfoItem size="lg" label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
+                <InfoItem size="lg" label="Bairro" value={selectedEc.bairro} icon={MapPin} />
+                <InfoItem size="lg" label="Cidade" value={selectedEc.cidade} icon={Map} />
+                <InfoItem size="lg" label="Estado / UF" value={selectedEc.state} icon={Map} />
+                <InfoItem size="lg" label="CEP" value={selectedEc.cep} icon={Hash} />
               </div>
             </Card>
           </div>
@@ -499,6 +499,47 @@ export default function CompliancePage() {
                   <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta bancária informada.</p>
                 </div>
               )}
+            </Card>
+
+            {/* 4. LOCALIZAÇÃO DO ESTABELECIMENTO (Mini Mapa Google Maps) */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-emerald-500 shadow-xl space-y-4">
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Map className="h-5 w-5 text-emerald-500" /> Localização no Mapa
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    `${selectedEc.rua}, ${selectedEc.numero} - ${selectedEc.bairro}, ${selectedEc.cidade} - ${selectedEc.state}`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10px] font-black text-brand-accent hover:underline flex items-center gap-1 uppercase tracking-wider"
+                >
+                  Abrir no Maps <ExternalLink className="h-3 w-3" />
+                </a>
+              </h3>
+              
+              <div className="relative rounded-sm overflow-hidden border border-neutral-200 h-56 w-full bg-neutral-100 shadow-inner group">
+                <iframe
+                  title="Localização do Estabelecimento"
+                  width="100%"
+                  height="100%"
+                  className="border-0 grayscale contrast-125 opacity-90 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                  loading="lazy"
+                  allowFullScreen
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                    `${selectedEc.rua}, ${selectedEc.numero} - ${selectedEc.bairro}, ${selectedEc.cidade} - ${selectedEc.state}`
+                  )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                />
+              </div>
+              
+              <div className="text-neutral-500 text-[10px] font-medium leading-relaxed bg-neutral-50 p-2.5 rounded-sm border border-neutral-100 flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-neutral-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-neutral-700 block uppercase tracking-wider text-[8px]">Endereço Confirmado:</span>
+                  {selectedEc.rua}, {selectedEc.numero} - {selectedEc.bairro}, {selectedEc.cidade}/{selectedEc.state}
+                </div>
+              </div>
             </Card>
           </div>
         </div>
@@ -991,23 +1032,31 @@ function InfoItem({
   label, 
   value, 
   icon: Icon,
-  className = ""
+  className = "",
+  size = "default"
 }: { 
   label: string; 
   value: React.ReactNode; 
   icon?: any;
   className?: string;
+  size?: "default" | "lg";
 }) {
+  const labelSize = size === "lg" ? "text-[10px]" : "text-[9px]";
+  const valueSize = size === "lg" ? "text-sm" : "text-xs";
+  const padding = size === "lg" ? "p-3.5 gap-3" : "p-2 gap-2";
+  const iconPadding = size === "lg" ? "p-1.5" : "p-1";
+  const iconSize = size === "lg" ? "h-4 w-4" : "h-3.5 w-3.5";
+
   return (
-    <div className={`flex items-start gap-2 p-2 rounded-sm bg-neutral-50 border border-neutral-100/50 hover:bg-neutral-100/30 transition-all ${className}`}>
+    <div className={`flex items-start rounded-sm bg-neutral-50 border border-neutral-100/50 hover:bg-neutral-100/30 transition-all ${padding} ${className}`}>
       {Icon && (
-        <div className="p-1 bg-white rounded-xs border border-neutral-200 text-neutral-500 shrink-0 shadow-sm">
-          <Icon className="h-3.5 w-3.5" />
+        <div className={`bg-white rounded-xs border border-neutral-200 text-neutral-500 shrink-0 shadow-sm ${iconPadding}`}>
+          <Icon className={iconSize} />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-        <div className="font-bold text-neutral-800 text-xs truncate leading-tight" title={typeof value === 'string' ? value : undefined}>{value}</div>
+        <p className={`font-black text-neutral-400 uppercase tracking-widest leading-none mb-1.5 ${labelSize}`}>{label}</p>
+        <div className={`font-bold text-neutral-800 truncate leading-tight ${valueSize}`} title={typeof value === 'string' ? value : undefined}>{value}</div>
       </div>
     </div>
   );
