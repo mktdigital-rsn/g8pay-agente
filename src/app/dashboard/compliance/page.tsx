@@ -103,8 +103,8 @@ export default function CompliancePage() {
   const [viewMode, setViewMode] = useState<"grid" | "kanban">("kanban");
   
   // Compliance Review States for Selected E.C.
-  const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions", observations: string }>>({});
-  const [ecStatus, setEcStatus] = useState<"approved" | "rejected" | "pending_level_2">("approved");
+  const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions" | "pending", observations: string }>>({}); 
+  const [ecStatus, setEcStatus] = useState<"approved" | "rejected" | "pending_level_2" | null>(null);
   const [ecObservations, setEcObservations] = useState("");
   const [isSubmittingCompliance, setIsSubmittingCompliance] = useState(false);
   // Document Preview States
@@ -159,15 +159,15 @@ export default function CompliancePage() {
         setEcObservations(details.observations || "");
         
         // Initialize document reviews
-        const initialReviews: Record<string, { status: "approved" | "rejected" | "revisions", observations: string }> = {};
+        const initialReviews: Record<string, { status: "approved" | "rejected" | "revisions" | "pending", observations: string }> = {};
         details.documents.forEach(doc => {
           initialReviews[doc.id] = {
-            status: doc.status === "pending" ? "approved" : doc.status,
+            status: "pending" as any,
             observations: doc.observations || ""
           };
         });
         setDocReviews(initialReviews);
-        setEcStatus(details.status === "pending" ? "approved" : details.status as any);
+        setEcStatus(details.status === "pending" ? null : details.status as any);
       }
     } catch (err: any) {
       console.error("Error loading E.C. details:", err);
@@ -237,11 +237,13 @@ export default function CompliancePage() {
       const payload = {
         status,
         observations: ecObservations,
-        documents: Object.entries(docReviews).map(([docId, review]) => ({
-          id: docId,
-          status: review.status,
-          observations: review.status !== "approved" ? review.observations : ""
-        }))
+        documents: Object.entries(docReviews)
+          .filter(([_, review]) => review.status !== "pending")
+          .map(([docId, review]) => ({
+            id: docId,
+            status: review.status,
+            observations: review.status !== "approved" ? review.observations : ""
+          }))
       };
       const res = await api.post(`/api/establishments/${selectedEc.id}/compliance`, payload);
       if (res.data && res.data.success) {
@@ -330,7 +332,7 @@ export default function CompliancePage() {
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-20">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Register Data, Address & Risk Assessment */}
           <div className="lg:col-span-6 space-y-8">
             
@@ -385,7 +387,43 @@ export default function CompliancePage() {
                 <InfoItem label="CEP" value={selectedEc.cep} icon={Hash} />
               </div>
             </Card>
-            {/* 3. RISCO & SEGURANÇA CARD (Upgraded with icons and styled badges) */}
+          </div>
+          {/* Right Column: Financial Data & Aligned Document Compliance */}
+          <div className="lg:col-span-6 space-y-8">
+            
+            {/* 1. INFORMAÇÕES FINANCEIRAS CARD (Includes banking details, revenue CSS chart, tags) */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
+              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
+                <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
+                <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
+              </div>
+              {/* Meios de Pagamento & Gráfico */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                <div className="space-y-2">
+                  <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest">Meios de Pagamento Aceitos</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Pix</Badge>
+                    <Badge className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Crédito</Badge>
+                    <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
+                  </span>
+                  <div className="flex items-end gap-1 h-14 pt-2 border-b border-neutral-100">
+                    {[35, 50, 42, 68, 55, 62, 85, 70, 78, 92].map((h, i) => (
+                      <div key={i} className="flex-1 bg-brand-accent hover:bg-brand-accent/80 rounded-t-xs transition-all duration-300" style={{ height: `${h}%` }} title={`Mês ${i+1}`} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+            {/* 2. RISCO & SEGURANÇA (movido para cá) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-red-500 shadow-xl space-y-6">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-red-500" /> Risco & Segurança
@@ -403,7 +441,6 @@ export default function CompliancePage() {
                     </div>
                   } 
                 />
-                
                 <InfoItem 
                   label="Alerta de Fraude" 
                   icon={AlertTriangle}
@@ -433,304 +470,265 @@ export default function CompliancePage() {
                 />
               </div>
             </Card>
-          </div>
-          {/* Right Column: Financial Data & Aligned Document Compliance */}
-          <div className="lg:col-span-6 space-y-8">
-            
-            {/* 1. INFORMAÇÕES FINANCEIRAS CARD (Includes banking details, revenue CSS chart, tags) */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
+            {/* 3. CONTA DE REPASSE — card separado para preencher o espaço */}
+            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-400 shadow-xl space-y-4">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
+                <Building className="h-5 w-5 text-blue-400" /> Conta de Repasse Cadastrada
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
-                <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
-                <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
-              </div>
-              {/* Bank details unified inside the card */}
-              <div className="bg-neutral-50/50 p-4 border border-neutral-100 rounded-sm space-y-3">
-                <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Building className="h-3.5 w-3.5 text-neutral-400" /> Conta de Repasse Cadastrada
-                </span>
-                {bankAccounts.length > 0 ? (
-                  bankAccounts.map((b: any, idx: number) => (
-                    <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <InfoItem label="Banco" value={b.banco || "---"} icon={Building} className="sm:col-span-2" />
+              {bankAccounts.length > 0 ? (
+                bankAccounts.map((b: any, idx: number) => (
+                  <div key={idx} className="space-y-3">
+                    <div className="flex items-center gap-4 p-4 bg-blue-50/40 border border-blue-100 rounded-sm">
+                      <div className="p-3 bg-blue-500 rounded-sm text-white shrink-0">
+                        <Building className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-0.5">Banco</span>
+                        <span className="text-base font-black text-[#0c0a09]">{b.banco || "---"}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
                       <InfoItem label="Agência / Conta" value={`${b.agencia || '---'} / ${b.conta || '---'}-${b.digito || ''}`} icon={Hash} />
                       <InfoItem label="Tipo de Conta" value={b.tipoConta || "---"} icon={CreditCard} />
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta informada.</p>
-                )}
-              </div>
-              {/* Methods & Chart */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-                <div className="space-y-2">
-                  <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest">Meios de Pagamento Aceitos</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Pix</Badge>
-                    <Badge className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Crédito</Badge>
-                    <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
                   </div>
+                ))
+              ) : (
+                <div className="py-6 text-center space-y-2">
+                  <Building className="h-8 w-8 text-neutral-300 mx-auto" />
+                  <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta bancária informada.</p>
                 </div>
-                <div>
-                  <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                    <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
-                  </span>
-                  <div className="flex items-end gap-1 h-12 pt-2 border-b border-neutral-100">
-                    {[35, 50, 42, 68, 55, 62, 85, 70, 78, 92].map((h, i) => (
-                      <div key={i} className="flex-1 bg-brand-accent hover:bg-brand-accent/80 rounded-t-xs transition-all duration-300" style={{ height: `${h}%` }} title={`Mês ${i+1}`} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Card>
-            {/* 2. VALIDAÇÃO DE DOCUMENTOS CARD (Document checklist scroll aligned to match preview box height) */}
-            <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
-              <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
-              </h3>
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
-                
-                {/* Documents Cards List (xl:col-span-7) with capped height and internal scroll */}
-                <div className="xl:col-span-7 space-y-2 max-h-[250px] overflow-y-auto pr-1.5 scrollbar-thin">
-                  {selectedEc.documents.length > 0 ? (
-                    selectedEc.documents.map((doc) => {
-                      const review = docReviews[doc.id] || { status: "approved", observations: "" };
-                      const isActivePreview = activePreviewDoc?.id === doc.id;
-                      
-                      return (
-                        <div 
-                          key={doc.id} 
-                          onClick={() => handlePreviewDoc(doc)}
-                          className={`p-2 rounded-sm border transition-all cursor-pointer space-y-1.5 ${
-                            isActivePreview 
-                              ? "bg-neutral-50 border-brand-accent shadow-sm"
-                              : "bg-white border-neutral-100 hover:bg-neutral-50/50"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2 min-w-0">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <FileText className={`h-4.5 w-4.5 shrink-0 ${isActivePreview ? 'text-brand-accent' : 'text-neutral-400'}`} />
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[9.5px] font-black text-neutral-800 uppercase tracking-tight truncate" title={doc.name}>{doc.name}</p>
-                                <p className="text-[7.5px] text-neutral-400 truncate" title={doc.fileName}>{doc.fileName} • versão 1</p>
-                              </div>
-                            </div>
-                            
-                            <a
-                              href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="h-6 w-6 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0"
-                              title="Baixar Documento"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Download className="h-3 w-3" />
-                            </a>
-                          </div>
-                          
-                          {/* Three-state buttons */}
-                          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => handleDocReviewChange(doc.id, "approved")}
-                              className={`flex-1 h-6.5 rounded-sm font-black text-[7.5px] uppercase tracking-widest flex items-center justify-center gap-0.5 border transition-all cursor-pointer ${
-                                review.status === "approved"
-                                  ? "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm font-extrabold"
-                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                              }`}
-                            >
-                              <Check className="h-2.5 w-2.5" /> Aprovar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDocReviewChange(doc.id, "rejected")}
-                              className={`flex-1 h-6.5 rounded-sm font-black text-[7.5px] uppercase tracking-widest flex items-center justify-center gap-0.5 border transition-all cursor-pointer ${
-                                review.status === "rejected"
-                                  ? "bg-red-50 border-red-500 text-red-700 shadow-sm font-extrabold"
-                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                              }`}
-                            >
-                              <X className="h-2.5 w-2.5" /> Reprovar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDocReviewChange(doc.id, "revisions")}
-                              className={`flex-1 h-6.5 rounded-sm font-black text-[7.5px] uppercase tracking-widest flex items-center justify-center gap-0.5 border transition-all cursor-pointer ${
-                                review.status === "revisions"
-                                  ? "bg-amber-50 border-amber-500 text-amber-700 shadow-sm font-extrabold"
-                                  : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                              }`}
-                            >
-                              <AlertCircle className="h-2.5 w-2.5" /> Revisão
-                            </button>
-                          </div>
-                          
-                          {/* Observations for rejected/revisions */}
-                          {(review.status === "rejected" || review.status === "revisions") && (
-                            <div className="space-y-1 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-                              <label className="text-[7px] font-black text-amber-600 uppercase tracking-widest block">
-                                Motivo da pendência *
-                              </label>
-                              <textarea
-                                value={review.observations}
-                                onChange={(e) => handleDocObsChange(doc.id, e.target.value)}
-                                placeholder="Indique o que precisa ser corrigido..."
-                                className="w-full min-h-[35px] p-1.5 text-[9px] border border-amber-200 rounded-sm bg-amber-50/10 focus-visible:outline-amber-500 text-neutral-800"
-                                required
-                              />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
-                  )}
-                </div>
-                {/* Document Preview Pane (xl:col-span-5) - height locked to match checklist scroll */}
-                <div className="xl:col-span-5 bg-neutral-50 border border-neutral-100 rounded-sm p-3 flex flex-col justify-between items-stretch h-[250px]">
-                  <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5 mb-1.5 shrink-0">
-                    <span className="text-[8.5px] font-black text-neutral-500 uppercase tracking-widest">Pré-visualização</span>
-                    {activePreviewDoc && previewBlobUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setIsModalOpen(true)}
-                        className="text-[7.5px] font-black text-brand-accent uppercase hover:underline cursor-pointer flex items-center gap-0.5 shrink-0"
-                      >
-                        <Eye className="h-2.5 w-2.5" /> Ampliar
-                      </button>
-                    )}
-                  </div>
-                  {isPreviewLoading ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-8 shrink-0">
-                      <Loader2 className="h-5 w-5 text-brand-accent animate-spin" />
-                      <span className="text-[7.5px] font-black text-neutral-400 uppercase tracking-widest">Carregando arquivo...</span>
-                    </div>
-                  ) : previewBlobUrl ? (
-                    <div 
-                      onClick={() => setIsModalOpen(true)}
-                      className="flex-1 w-full flex items-center justify-center overflow-hidden bg-white border border-neutral-200 rounded-sm cursor-pointer hover:border-brand-accent hover:shadow-md transition-all relative group"
-                      title="Clique para ampliar visualização"
-                    >
-                      {/* Hover Overlay */}
-                      <div className="absolute inset-0 bg-[#ff7711]/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
-                        <span className="bg-neutral-900/80 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-sm shadow-md flex items-center gap-1">
-                          <Eye className="h-3 w-3" /> Clique para Ampliar
-                        </span>
-                      </div>
-                      {activePreviewDoc?.mimeType.startsWith("image/") ? (
-                        <img 
-                          src={previewBlobUrl} 
-                          alt={activePreviewDoc.name} 
-                          className="max-w-full max-h-[180px] object-contain p-1.5" 
-                        />
-                      ) : activePreviewDoc?.mimeType === "application/pdf" || activePreviewDoc?.mimeType === "text/html" ? (
-                        <iframe 
-                          src={previewBlobUrl} 
-                          title="DocPreview" 
-                          className="w-full h-[180px] border-none pointer-events-none" 
-                        />
-                      ) : (
-                        <div className="text-center p-4 space-y-1.5">
-                          <FileText className="h-7 w-7 text-neutral-400 mx-auto" />
-                          <p className="text-[9px] text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
-                          <a 
-                            href={previewBlobUrl} 
-                            download={activePreviewDoc?.fileName}
-                            className="inline-block text-[8px] font-black text-brand-accent uppercase hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Baixar arquivo
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-4 text-neutral-300 gap-1.5 border border-dashed border-neutral-200 rounded-sm bg-white">
-                      <FileSearch className="h-8 w-8 text-neutral-200" />
-                      <p className="text-[8.5px] font-black uppercase text-neutral-400 tracking-wider">
-                        Selecione um documento ao lado para pré-visualizar
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {/* Notas de Revisão Interna & Audit Logs */}
-              <div className="pt-3 border-t border-neutral-100 space-y-3">
-                <div className="space-y-2">
-                  <h4 className="text-[10.5px] font-black text-[#0c0a09] uppercase tracking-widest">Parecer Final do Credenciamento</h4>
-                  
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setEcStatus("approved")}
-                      className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 border-2 transition-all cursor-pointer ${
-                        ecStatus === "approved"
-                          ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/10"
-                          : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                      }`}
-                    >
-                      <Check className="h-3.5 w-3.5" /> Aprovar E.C.
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEcStatus("rejected")}
-                      className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1.5 border-2 transition-all cursor-pointer ${
-                        ecStatus === "rejected"
-                          ? "bg-red-500 border-red-500 text-white shadow-md shadow-red-500/10"
-                          : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300"
-                      }`}
-                    >
-                      <X className="h-3.5 w-3.5" /> Reprovar E.C.
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[8.5px] font-black text-neutral-500 uppercase tracking-widest">
-                    Notas de Revisão Interna / Instruções de Ajuste
-                  </label>
-                  <textarea
-                    value={ecObservations}
-                    onChange={(e) => setEcObservations(e.target.value)}
-                    placeholder="Instruções para o agente ou observações de compliance..."
-                    className="w-full min-h-[60px] p-2 text-xs border border-neutral-200 rounded-sm bg-neutral-50/50 text-neutral-800 focus-visible:outline-brand-accent focus-visible:bg-white transition-all"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest block">Histórico de Ações</span>
-                  <div className="text-[9.5px] font-bold text-neutral-500 space-y-1 bg-neutral-50/50 p-2.5 rounded-sm border border-neutral-100">
-                    <div className="flex items-center gap-1.5 text-emerald-600">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Cadastro recebido e validado eletronicamente - 16/06/2026
-                    </div>
-                    {selectedEc.status !== "pending" && (
-                      <div className="flex items-center gap-1.5 text-neutral-600">
-                        <AlertCircle className="h-3.5 w-3.5 shrink-0 text-brand-accent" />
-                        Status atualizado para {selectedEc.status === "approved" ? "APROVADO" : selectedEc.status === "pending_level_2" ? "ENCAMINHADO NÍVEL 2" : "REPROVADO"} - {new Date(selectedEc.updatedAt).toLocaleDateString('pt-BR')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <Button
-                  onClick={() => handleSaveDecision(ecStatus)}
-                  disabled={isSubmittingCompliance}
-                  className="w-full h-10 bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-xs uppercase tracking-widest rounded-sm transition-all shadow-lg shadow-orange-500/10 mt-3 cursor-pointer"
-                >
-                  {isSubmittingCompliance ? (
-                    <>
-                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin animate-infinite" />
-                      Salvando Decisão...
-                    </>
-                  ) : (
-                    "Salvar Análise de Compliance"
-                  )}
-                </Button>
-              </div>
+              )}
             </Card>
           </div>
         </div>
+
+        {/* ── Full-width: Validação de Documentos + Parecer Final ── */}
+        <Card className="mt-8 p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6 pb-20">
+          <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-4 flex items-center gap-2">
+            <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
+          </h3>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch">
+            {/* Documents Cards List */}
+            <div className="xl:col-span-5 space-y-4 max-h-[520px] overflow-y-auto pr-2 scrollbar-thin">
+              {selectedEc.documents.length > 0 ? (
+                selectedEc.documents.map((doc) => {
+                  const review = docReviews[doc.id] || { status: "pending", observations: "" };
+                  const isActivePreview = activePreviewDoc?.id === doc.id;
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => handlePreviewDoc(doc)}
+                      className={`p-4 rounded-sm border-2 transition-all cursor-pointer space-y-3 ${
+                        isActivePreview
+                          ? "bg-neutral-50 border-brand-accent shadow-md"
+                          : "bg-white border-neutral-100 hover:border-neutral-200 shadow-sm hover:shadow-md"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className={`p-2 rounded-sm border shrink-0 ${isActivePreview ? 'bg-brand-accent/10 border-brand-accent/30 text-brand-accent' : 'bg-neutral-50 border-neutral-200 text-neutral-400'}`}>
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-neutral-800 uppercase tracking-tight truncate" title={doc.name}>{doc.name}</p>
+                            <p className="text-[9.5px] text-neutral-400 truncate mt-0.5" title={doc.fileName}>{doc.fileName} • versão 1</p>
+                          </div>
+                        </div>
+                        <a
+                          href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="h-8 w-8 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0 transition-all hover:border-neutral-300"
+                          title="Baixar Documento"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      </div>
+                      {/* Three-state buttons — all gray by default */}
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => handleDocReviewChange(doc.id, "approved")}
+                          className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
+                            review.status === "approved"
+                              ? "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm"
+                              : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+                          }`}
+                        >
+                          <Check className="h-3 w-3" /> Aprovar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDocReviewChange(doc.id, "rejected")}
+                          className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
+                            review.status === "rejected"
+                              ? "bg-red-50 border-red-500 text-red-700 shadow-sm"
+                              : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+                          }`}
+                        >
+                          <X className="h-3 w-3" /> Reprovar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDocReviewChange(doc.id, "revisions")}
+                          className={`flex-1 h-9 rounded-sm font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 border-2 transition-all cursor-pointer ${
+                            review.status === "revisions"
+                              ? "bg-amber-50 border-amber-500 text-amber-700 shadow-sm"
+                              : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+                          }`}
+                        >
+                          <AlertCircle className="h-3 w-3" /> Revisão
+                        </button>
+                      </div>
+                      {(review.status === "rejected" || review.status === "revisions") && (
+                        <div className="space-y-1 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                          <label className="text-[8px] font-black text-amber-600 uppercase tracking-widest block">
+                            Motivo da pendência *
+                          </label>
+                          <textarea
+                            value={review.observations}
+                            onChange={(e) => handleDocObsChange(doc.id, e.target.value)}
+                            placeholder="Indique o que precisa ser corrigido..."
+                            className="w-full min-h-[50px] p-2 text-xs border border-amber-200 rounded-sm bg-amber-50/10 focus-visible:outline-amber-500 text-neutral-800"
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
+              )}
+            </div>
+            {/* Document Preview Pane */}
+            <div className="xl:col-span-7 bg-neutral-50 border border-neutral-100 rounded-sm p-4 flex flex-col items-stretch h-[520px]">
+              <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3 shrink-0">
+                <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Pré-visualização</span>
+                {activePreviewDoc && previewBlobUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(true)}
+                    className="text-[8px] font-black text-brand-accent uppercase hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                  >
+                    <Eye className="h-3 w-3" /> Ampliar
+                  </button>
+                )}
+              </div>
+              {isPreviewLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="h-6 w-6 text-brand-accent animate-spin" />
+                  <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest">Carregando arquivo...</span>
+                </div>
+              ) : previewBlobUrl ? (
+                <div
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex-1 w-full flex items-center justify-center overflow-hidden bg-white border border-neutral-200 rounded-sm cursor-pointer hover:border-brand-accent hover:shadow-md transition-all relative group"
+                  title="Clique para ampliar visualização"
+                >
+                  <div className="absolute inset-0 bg-[#ff7711]/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
+                    <span className="bg-neutral-900/80 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-sm shadow-md flex items-center gap-1">
+                      <Eye className="h-3 w-3" /> Clique para Ampliar
+                    </span>
+                  </div>
+                  {activePreviewDoc?.mimeType.startsWith("image/") ? (
+                    <img src={previewBlobUrl} alt={activePreviewDoc.name} className="max-w-full max-h-full object-contain p-2" />
+                  ) : activePreviewDoc?.mimeType === "application/pdf" || activePreviewDoc?.mimeType === "text/html" ? (
+                    <iframe src={previewBlobUrl} title="DocPreview" className="w-full h-full border-none pointer-events-none" />
+                  ) : (
+                    <div className="text-center p-4 space-y-2">
+                      <FileText className="h-8 w-8 text-neutral-400 mx-auto" />
+                      <p className="text-[9px] text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
+                      <a href={previewBlobUrl} download={activePreviewDoc?.fileName} className="inline-block text-[8px] font-black text-brand-accent uppercase hover:underline" onClick={(e) => e.stopPropagation()}>Baixar arquivo</a>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3 border border-dashed border-neutral-200 rounded-sm bg-white">
+                  <FileSearch className="h-14 w-14 text-neutral-200" />
+                  <p className="text-[10px] font-black uppercase text-neutral-400 tracking-wider">Selecione um documento ao lado para pré-visualizar</p>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Parecer Final */}
+          <div className="pt-6 border-t border-neutral-100 space-y-4">
+            <div className="space-y-3">
+              <h4 className="text-sm font-black text-[#0c0a09] uppercase tracking-widest">Parecer Final do Credenciamento</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEcStatus("approved")}
+                  className={`h-12 rounded-sm font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border-2 transition-all cursor-pointer ${
+                    ecStatus === "approved"
+                      ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/10"
+                      : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+                  }`}
+                >
+                  <Check className="h-4 w-4" /> Aprovar E.C.
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEcStatus("rejected")}
+                  className={`h-12 rounded-sm font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 border-2 transition-all cursor-pointer ${
+                    ecStatus === "rejected"
+                      ? "bg-red-500 border-red-500 text-white shadow-md shadow-red-500/10"
+                      : "bg-white border-neutral-200 text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+                  }`}
+                >
+                  <X className="h-4 w-4" /> Reprovar E.C.
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-neutral-500 uppercase tracking-widest">
+                Notas de Revisão Interna / Instruções de Ajuste
+              </label>
+              <textarea
+                value={ecObservations}
+                onChange={(e) => setEcObservations(e.target.value)}
+                placeholder="Instruções para o agente ou observações de compliance..."
+                className="w-full min-h-[70px] p-3 text-sm border border-neutral-200 rounded-sm bg-neutral-50/50 text-neutral-800 focus-visible:outline-brand-accent focus-visible:bg-white transition-all"
+              />
+            </div>
+            <div className="space-y-2">
+              <span className="text-xs font-black text-neutral-500 uppercase tracking-widest block">Histórico de Ações</span>
+              <div className="text-xs font-bold text-neutral-500 space-y-2 bg-neutral-50/50 p-4 rounded-sm border border-neutral-100">
+                <div className="flex items-center gap-2 text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" /> Cadastro recebido e validado eletronicamente - 16/06/2026
+                </div>
+                {selectedEc.status !== "pending" && (
+                  <div className="flex items-center gap-2 text-neutral-600">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-brand-accent" />
+                    Status atualizado para {selectedEc.status === "approved" ? "APROVADO" : selectedEc.status === "pending_level_2" ? "ENCAMINHADO NÍVEL 2" : "REPROVADO"} - {new Date(selectedEc.updatedAt).toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+              </div>
+            </div>
+            <Button
+              onClick={() => {
+                if (!ecStatus) {
+                  toast.error("Selecione um parecer final para o credenciamento.");
+                  return;
+                }
+                handleSaveDecision(ecStatus);
+              }}
+              disabled={isSubmittingCompliance}
+              className="w-full h-11 bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-xs uppercase tracking-widest rounded-sm transition-all shadow-lg shadow-orange-500/10 cursor-pointer"
+            >
+              {isSubmittingCompliance ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin animate-infinite" />
+                  Salvando Decisão...
+                </>
+              ) : (
+                "Salvar Análise de Compliance"
+              )}
+            </Button>
+          </div>
+        </Card>
         {/* Fullscreen Preview Modal */}
         {isModalOpen && activePreviewDoc && previewBlobUrl && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">

@@ -93,6 +93,7 @@ export default function MeusClientesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"grid" | "kanban">("kanban");
   // Document Preview States
   const [activePreviewDoc, setActivePreviewDoc] = useState<EstablishmentDocument | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
@@ -612,62 +613,124 @@ export default function MeusClientesPage() {
                 Buscar
               </Button>
             </form>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* View Mode Toggle */}
+              <div className="flex border border-neutral-200 rounded-sm p-1 bg-neutral-50 shrink-0 h-11 items-center">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("kanban")}
+                  className={`px-4 h-8 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === "kanban"
+                      ? "bg-neutral-900 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-800"
+                  }`}
+                >
+                  CRM Kanban
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`px-4 h-8 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-neutral-900 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-800"
+                  }`}
+                >
+                  Grade
+                </button>
+              </div>
               <FilterButton active={filterStatus === ""} onClick={() => setFilterStatus("")} label="Todos" />
               <FilterButton active={filterStatus === "pending"} onClick={() => setFilterStatus("pending")} label="Pendentes" />
               <FilterButton active={filterStatus === "approved"} onClick={() => setFilterStatus("approved")} label="Aprovados" />
               <FilterButton active={filterStatus === "rejected"} onClick={() => setFilterStatus("rejected")} label="Pendências" />
             </div>
           </div>
-          {/* Client list grid */}
+          {/* Client list grid or kanban */}
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-brand-accent"></div>
               <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Buscando estabelecimentos...</p>
             </div>
           ) : establishments.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {establishments.map((ec) => (
-                <Card key={ec.id} className="p-6 bg-white border border-neutral-100 hover:border-neutral-200 transition-all duration-300 shadow-md hover:shadow-xl rounded-sm flex flex-col justify-between gap-6 relative overflow-hidden group">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      {getStatusBadge(ec.status)}
-                      <span className="text-[10px] text-neutral-400 font-bold uppercase">
-                        {new Date(ec.createdAt).toLocaleDateString("pt-BR")}
-                      </span>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-neutral-800 uppercase tracking-tight leading-tight truncate group-hover:text-brand-accent transition-colors">
-                        {ec.nomeFantasia}
-                      </h3>
-                      <p className="text-[11px] text-neutral-400 font-semibold truncate mt-0.5">
-                        {ec.razaoSocial || "---"}
-                      </p>
-                    </div>
-                    <div className="space-y-1 text-xs text-neutral-600 pt-2 border-t border-neutral-50">
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">CNPJ/CPF:</span>
-                        <span className="font-semibold">{ec.cnpjCpf}</span>
+            viewMode === "kanban" ? (
+              <div className="flex flex-row overflow-x-auto gap-6 items-start pb-20 w-full scrollbar-thin">
+                <AgentKanbanColumn
+                  title="Pendentes"
+                  count={establishments.filter(e => e.status === "pending").length}
+                  colorClass="border-t-amber-500 bg-amber-500/5"
+                  accentColor="text-amber-600 bg-amber-50"
+                  items={establishments.filter(e => e.status === "pending")}
+                  onSelect={handleSelectEc}
+                />
+                <AgentKanbanColumn
+                  title="Em Análise Nível 2"
+                  count={establishments.filter(e => e.status === "pending_level_2").length}
+                  colorClass="border-t-blue-500 bg-blue-500/5"
+                  accentColor="text-blue-600 bg-blue-50"
+                  items={establishments.filter(e => e.status === "pending_level_2")}
+                  onSelect={handleSelectEc}
+                />
+                <AgentKanbanColumn
+                  title="Aprovados"
+                  count={establishments.filter(e => e.status === "approved").length}
+                  colorClass="border-t-emerald-500 bg-emerald-500/5"
+                  accentColor="text-emerald-600 bg-emerald-50"
+                  items={establishments.filter(e => e.status === "approved")}
+                  onSelect={handleSelectEc}
+                />
+                <AgentKanbanColumn
+                  title="Com Pendências"
+                  count={establishments.filter(e => e.status === "rejected").length}
+                  colorClass="border-t-red-500 bg-red-500/5"
+                  accentColor="text-red-600 bg-red-50"
+                  items={establishments.filter(e => e.status === "rejected")}
+                  onSelect={handleSelectEc}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {establishments.map((ec) => (
+                  <Card key={ec.id} className="p-6 bg-white border border-neutral-100 hover:border-neutral-200 transition-all duration-300 shadow-md hover:shadow-xl rounded-sm flex flex-col justify-between gap-6 relative overflow-hidden group">
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        {getStatusBadge(ec.status)}
+                        <span className="text-[10px] text-neutral-400 font-bold uppercase">
+                          {new Date(ec.createdAt).toLocaleDateString("pt-BR")}
+                        </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">Cidade/UF:</span>
-                        <span className="font-semibold">{ec.cidade} - {ec.state}</span>
+                      <div>
+                        <h3 className="text-lg font-black text-neutral-800 uppercase tracking-tight leading-tight truncate group-hover:text-brand-accent transition-colors">
+                          {ec.nomeFantasia}
+                        </h3>
+                        <p className="text-[11px] text-neutral-400 font-semibold truncate mt-0.5">
+                          {ec.razaoSocial || "---"}
+                        </p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">Maquininhas:</span>
-                        <span className="font-bold text-[#0c0a09]">{ec.quantidade} u.</span>
+                      <div className="space-y-1 text-xs text-neutral-600 pt-2 border-t border-neutral-50">
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">CNPJ/CPF:</span>
+                          <span className="font-semibold">{ec.cnpjCpf}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">Cidade/UF:</span>
+                          <span className="font-semibold">{ec.cidade} - {ec.state}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">Maquininhas:</span>
+                          <span className="font-bold text-[#0c0a09]">{ec.quantidade} u.</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <Button
-                    onClick={() => handleSelectEc(ec.id)}
-                    className="w-full h-10 bg-neutral-50 hover:bg-neutral-900 hover:text-white border border-neutral-200 text-[#0c0a09] rounded-sm text-[10px] font-black uppercase tracking-widest transition-all mt-2 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-                  >
-                    <Eye className="h-4 w-4" /> Detalhes & Status
-                  </Button>
-                </Card>
-              ))}
-            </div>
+                    <Button
+                      onClick={() => handleSelectEc(ec.id)}
+                      className="w-full h-10 bg-neutral-50 hover:bg-neutral-900 hover:text-white border border-neutral-200 text-[#0c0a09] rounded-sm text-[10px] font-black uppercase tracking-widest transition-all mt-2 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <Eye className="h-4 w-4" /> Detalhes & Status
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            )
           ) : (
             <div className="p-16 border border-dashed border-neutral-200 rounded-sm text-center bg-white shadow-sm flex flex-col items-center justify-center gap-4">
               <Building2 className="h-12 w-12 text-neutral-300" />
@@ -740,6 +803,67 @@ export default function MeusClientesPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+// Agent Kanban Column sub-component
+function AgentKanbanColumn({
+  title,
+  count,
+  colorClass,
+  accentColor,
+  items,
+  onSelect,
+}: {
+  title: string;
+  count: number;
+  colorClass: string;
+  accentColor: string;
+  items: Establishment[];
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className={`rounded-sm border-t-[4px] border border-neutral-150/60 bg-white shadow-lg flex flex-col p-4 space-y-4 max-h-[600px] xl:max-h-[700px] shrink-0 flex-1 min-w-[280px] sm:min-w-[300px] md:min-w-[320px] max-w-sm ${colorClass}`}>
+      <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+        <h4 className="text-[11px] font-black text-[#0c0a09] uppercase tracking-wider">{title}</h4>
+        <span className={`text-[9px] font-black px-2 py-0.5 rounded-sm ${accentColor}`}>{count}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin max-h-[500px] xl:max-h-[600px]">
+        {items.length > 0 ? (
+          items.map(ec => (
+            <div
+              key={ec.id}
+              onClick={() => onSelect(ec.id)}
+              className="p-4 bg-neutral-50/50 hover:bg-neutral-50 border border-neutral-200/60 rounded-sm shadow-sm hover:shadow-md transition-all cursor-pointer space-y-3 relative group"
+            >
+              <div className="space-y-1">
+                <h5 className="font-black text-neutral-800 text-xs leading-snug uppercase group-hover:text-brand-accent transition-colors truncate" title={ec.nomeFantasia}>
+                  {ec.nomeFantasia}
+                </h5>
+                <p className="text-[8.5px] text-neutral-400 font-mono leading-none">{ec.cnpjCpf}</p>
+              </div>
+              <div className="space-y-1.5 text-[9.5px] text-neutral-500">
+                <div className="flex items-center gap-1.5 truncate">
+                  <MapPin className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span className="font-semibold truncate">{ec.cidade} - {ec.state}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span>{new Date(ec.createdAt).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CreditCard className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span>Maquininhas: <strong className="text-neutral-600">{ec.quantidade} u.</strong></span>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="py-8 text-center text-[9px] text-neutral-400 font-bold uppercase tracking-wider italic">
+            Sem estabelecimentos
+          </div>
+        )}
+      </div>
     </div>
   );
 }
