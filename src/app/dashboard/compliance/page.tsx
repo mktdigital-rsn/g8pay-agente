@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import api from "@/lib/api";
 import {
@@ -40,7 +39,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-
 type Establishment = {
   id: string;
   agentId: string;
@@ -78,7 +76,6 @@ type Establishment = {
   agentName?: string;
   agentCpf?: string;
 };
-
 type EstablishmentDocument = {
   id: string;
   name: string;
@@ -87,7 +84,6 @@ type EstablishmentDocument = {
   status: "pending" | "approved" | "rejected" | "revisions";
   observations?: string;
 };
-
 type EstablishmentDetails = Establishment & {
   documents: EstablishmentDocument[];
   agent?: {
@@ -95,7 +91,6 @@ type EstablishmentDetails = Establishment & {
     cpf: string;
   } | null;
 };
-
 export default function CompliancePage() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,19 +100,18 @@ export default function CompliancePage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"grid" | "kanban">("kanban");
   
   // Compliance Review States for Selected E.C.
   const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions", observations: string }>>({});
   const [ecStatus, setEcStatus] = useState<"approved" | "rejected" | "pending_level_2">("approved");
   const [ecObservations, setEcObservations] = useState("");
   const [isSubmittingCompliance, setIsSubmittingCompliance] = useState(false);
-
   // Document Preview States
   const [activePreviewDoc, setActivePreviewDoc] = useState<EstablishmentDocument | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const fetchEstablishments = async () => {
     setLoading(true);
     try {
@@ -141,16 +135,13 @@ export default function CompliancePage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchEstablishments();
   }, [filterStatus]);
-
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchEstablishments();
   };
-
   const handleSelectEc = async (id: string) => {
     setLoadingDetails(true);
     
@@ -160,7 +151,6 @@ export default function CompliancePage() {
       setPreviewBlobUrl(null);
     }
     setActivePreviewDoc(null);
-
     try {
       const res = await api.get(`/api/establishments/${id}`);
       if (res.data && res.data.success) {
@@ -186,7 +176,6 @@ export default function CompliancePage() {
       setLoadingDetails(false);
     }
   };
-
   const handleDocReviewChange = (docId: string, status: "approved" | "rejected" | "revisions") => {
     setDocReviews(prev => ({
       ...prev,
@@ -196,7 +185,6 @@ export default function CompliancePage() {
       }
     }));
   };
-
   const handleDocObsChange = (docId: string, obs: string) => {
     setDocReviews(prev => ({
       ...prev,
@@ -206,7 +194,6 @@ export default function CompliancePage() {
       }
     }));
   };
-
   const handlePreviewDoc = async (doc: EstablishmentDocument) => {
     if (activePreviewDoc?.id === doc.id) return;
     
@@ -232,7 +219,6 @@ export default function CompliancePage() {
       setIsPreviewLoading(false);
     }
   };
-
   const handleSaveDecision = async (status: "approved" | "rejected" | "pending_level_2") => {
     if (!selectedEc) return;
     
@@ -245,9 +231,7 @@ export default function CompliancePage() {
         validationFailed = true;
       }
     });
-
     if (validationFailed) return;
-
     setIsSubmittingCompliance(true);
     try {
       const payload = {
@@ -259,7 +243,6 @@ export default function CompliancePage() {
           observations: review.status !== "approved" ? review.observations : ""
         }))
       };
-
       const res = await api.post(`/api/establishments/${selectedEc.id}/compliance`, payload);
       if (res.data && res.data.success) {
         toast.success("Análise de compliance salva com sucesso!");
@@ -275,7 +258,6 @@ export default function CompliancePage() {
       setIsSubmittingCompliance(false);
     }
   };
-
   // Clean up blob URL on unmount
   useEffect(() => {
     return () => {
@@ -284,7 +266,6 @@ export default function CompliancePage() {
       }
     };
   }, [previewBlobUrl]);
-
   const parseJsonList = (jsonStr: string) => {
     try {
       return JSON.parse(jsonStr) || [];
@@ -292,7 +273,6 @@ export default function CompliancePage() {
       return [];
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "approved":
@@ -305,7 +285,6 @@ export default function CompliancePage() {
         return <Badge className="bg-amber-50 text-amber-600 border border-amber-200 uppercase px-3 py-1 font-black text-[9px] tracking-wider rounded-sm shadow-sm">Pendente</Badge>;
     }
   };
-
   const maskAgentName = (name?: string) => {
     if (!name) return "---";
     const parts = name.split(" ");
@@ -314,24 +293,20 @@ export default function CompliancePage() {
     const last = parts[parts.length - 1];
     return `${first} ** * ${last}`;
   };
-
   const maskAgentCpf = (cpf?: string) => {
     if (!cpf) return "---";
     const clean = cpf.replace(/\D/g, "");
     if (clean.length !== 11) return cpf;
     return `${clean.substring(0, 3)}.*.*.${clean.substring(9, 11)}`;
   };
-
   if (selectedEc) {
     const contacts = parseJsonList(selectedEc.contactsJson);
     const bankAccounts = parseJsonList(selectedEc.bankAccountsJson);
     const agentName = selectedEc.agent?.fullName || selectedEc.agentName || "";
     const agentCpf = selectedEc.agent?.cpf || selectedEc.agentCpf || "";
-
     // Generate consistent mock risk variables based on establishment ID
     const scoreVal = 600 + (selectedEc.id.charCodeAt(0) % 350);
     const hasFraudHistory = selectedEc.id.charCodeAt(1) % 2 === 0;
-
     return (
       <div className="p-4 sm:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
         {/* Header */}
@@ -355,7 +330,6 @@ export default function CompliancePage() {
             </p>
           </div>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-20">
           {/* Left Column: Register Data, Address & Risk Assessment */}
           <div className="lg:col-span-6 space-y-8">
@@ -379,10 +353,9 @@ export default function CompliancePage() {
                     </h2>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InfoItem label="CNPJ/CPF" value={selectedEc.cnpjCpf} icon={FileText} className="sm:col-span-2" />
-                  <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} />
+                  <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} className="sm:col-span-2" />
                   <InfoItem label="Tipo Estabelecimento" value={selectedEc.tipoEstabelecimento} icon={User} />
                   <InfoItem label="Tipo de Empresa" value={selectedEc.tipoEmpresa} icon={Building} />
                   <InfoItem label="Contato Principal" value={selectedEc.contatoPrincipal} icon={Phone} />
@@ -393,19 +366,18 @@ export default function CompliancePage() {
                   <InfoItem label="CNAE Principal" value={selectedEc.cnae} icon={Briefcase} />
                   <InfoItem label="MCC" value={selectedEc.mcc} icon={Hash} />
                   <InfoItem label="Shopping?" value={selectedEc.shopping === "Sim" ? `Sim (${selectedEc.descricaoShopping || ''})` : "Não"} icon={Building2} className="sm:col-span-2" />
-                  <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} />
+                  <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} className="sm:col-span-2" />
                 </div>
               </div>
             </Card>
-
             {/* 2. ENDEREÇO DE INSTALAÇÃO (Isolated in a new Card below Dados Cadastrais) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
               </h3>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2 md:col-span-3" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
                 <InfoItem label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
                 <InfoItem label="Bairro" value={selectedEc.bairro} icon={MapPin} />
                 <InfoItem label="Cidade" value={selectedEc.cidade} icon={Map} />
@@ -413,13 +385,11 @@ export default function CompliancePage() {
                 <InfoItem label="CEP" value={selectedEc.cep} icon={Hash} />
               </div>
             </Card>
-
             {/* 3. RISCO & SEGURANÇA CARD (Upgraded with icons and styled badges) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-red-500 shadow-xl space-y-6">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-red-500" /> Risco & Segurança
               </h3>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoItem 
                   label="Score de Crédito" 
@@ -443,7 +413,6 @@ export default function CompliancePage() {
                     </span>
                   } 
                 />
-
                 <InfoItem 
                   label="Processos Judiciais" 
                   icon={FileSearch}
@@ -453,7 +422,6 @@ export default function CompliancePage() {
                     </a>
                   } 
                 />
-
                 <InfoItem 
                   label="Reputação Online" 
                   icon={Globe}
@@ -466,7 +434,6 @@ export default function CompliancePage() {
               </div>
             </Card>
           </div>
-
           {/* Right Column: Financial Data & Aligned Document Compliance */}
           <div className="lg:col-span-6 space-y-8">
             
@@ -475,13 +442,11 @@ export default function CompliancePage() {
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
               </h3>
-
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
                 <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
                 <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
               </div>
-
               {/* Bank details unified inside the card */}
               <div className="bg-neutral-50/50 p-4 border border-neutral-100 rounded-sm space-y-3">
                 <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -499,7 +464,6 @@ export default function CompliancePage() {
                   <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta informada.</p>
                 )}
               </div>
-
               {/* Methods & Chart */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
                 <div className="space-y-2">
@@ -510,7 +474,6 @@ export default function CompliancePage() {
                     <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
                   </div>
                 </div>
-
                 <div>
                   <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                     <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
@@ -523,13 +486,11 @@ export default function CompliancePage() {
                 </div>
               </div>
             </Card>
-
             {/* 2. VALIDAÇÃO DE DOCUMENTOS CARD (Document checklist scroll aligned to match preview box height) */}
             <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
               <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                 <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
               </h3>
-
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                 
                 {/* Documents Cards List (xl:col-span-7) with capped height and internal scroll */}
@@ -583,7 +544,6 @@ export default function CompliancePage() {
                             >
                               <Check className="h-2.5 w-2.5" /> Aprovar
                             </button>
-
                             <button
                               type="button"
                               onClick={() => handleDocReviewChange(doc.id, "rejected")}
@@ -595,7 +555,6 @@ export default function CompliancePage() {
                             >
                               <X className="h-2.5 w-2.5" /> Reprovar
                             </button>
-
                             <button
                               type="button"
                               onClick={() => handleDocReviewChange(doc.id, "revisions")}
@@ -631,7 +590,6 @@ export default function CompliancePage() {
                     <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
                   )}
                 </div>
-
                 {/* Document Preview Pane (xl:col-span-5) - height locked to match checklist scroll */}
                 <div className="xl:col-span-5 bg-neutral-50 border border-neutral-100 rounded-sm p-3 flex flex-col justify-between items-stretch h-[250px]">
                   <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5 mb-1.5 shrink-0">
@@ -646,7 +604,6 @@ export default function CompliancePage() {
                       </button>
                     )}
                   </div>
-
                   {isPreviewLoading ? (
                     <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-8 shrink-0">
                       <Loader2 className="h-5 w-5 text-brand-accent animate-spin" />
@@ -664,7 +621,6 @@ export default function CompliancePage() {
                           <Eye className="h-3 w-3" /> Clique para Ampliar
                         </span>
                       </div>
-
                       {activePreviewDoc?.mimeType.startsWith("image/") ? (
                         <img 
                           src={previewBlobUrl} 
@@ -702,7 +658,6 @@ export default function CompliancePage() {
                   )}
                 </div>
               </div>
-
               {/* Notas de Revisão Interna & Audit Logs */}
               <div className="pt-3 border-t border-neutral-100 space-y-3">
                 <div className="space-y-2">
@@ -733,7 +688,6 @@ export default function CompliancePage() {
                     </button>
                   </div>
                 </div>
-
                 <div className="space-y-1">
                   <label className="text-[8.5px] font-black text-neutral-500 uppercase tracking-widest">
                     Notas de Revisão Interna / Instruções de Ajuste
@@ -745,7 +699,6 @@ export default function CompliancePage() {
                     className="w-full min-h-[60px] p-2 text-xs border border-neutral-200 rounded-sm bg-neutral-50/50 text-neutral-800 focus-visible:outline-brand-accent focus-visible:bg-white transition-all"
                   />
                 </div>
-
                 <div className="space-y-1.5">
                   <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest block">Histórico de Ações</span>
                   <div className="text-[9.5px] font-bold text-neutral-500 space-y-1 bg-neutral-50/50 p-2.5 rounded-sm border border-neutral-100">
@@ -760,7 +713,6 @@ export default function CompliancePage() {
                     )}
                   </div>
                 </div>
-
                 <Button
                   onClick={() => handleSaveDecision(ecStatus)}
                   disabled={isSubmittingCompliance}
@@ -779,7 +731,6 @@ export default function CompliancePage() {
             </Card>
           </div>
         </div>
-
         {/* Fullscreen Preview Modal */}
         {isModalOpen && activePreviewDoc && previewBlobUrl && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -844,11 +795,9 @@ export default function CompliancePage() {
       </div>
     );
   }
-
   return (
     <div className="p-2 sm:p-4 md:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-brand-accent/5 rounded-full blur-[120px] -mr-64 -mt-64 pointer-events-none" />
-
       <div className="space-y-8 relative z-10">
         {/* Page Header */}
         <div className="space-y-3 px-2">
@@ -862,7 +811,6 @@ export default function CompliancePage() {
             Analise e homologue os credenciamentos e documentos enviados pelos agentes.
           </p>
         </div>
-
         {/* Filters and search section */}
         <Card className="p-5 bg-white border border-neutral-100 shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 rounded-sm">
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 h-12 rounded-sm flex-1 min-w-0">
@@ -876,8 +824,32 @@ export default function CompliancePage() {
             />
             <Button type="submit" className="h-8 bg-brand-accent hover:bg-brand-accent-hover text-white rounded-sm text-[9px] font-black uppercase tracking-widest px-4 cursor-pointer shadow-lg shadow-orange-500/10">Buscar</Button>
           </form>
-
-          <div className="flex gap-4 shrink-0">
+          <div className="flex gap-4 shrink-0 items-center">
+            {/* View Mode Toggle */}
+            <div className="flex border border-neutral-200 rounded-sm p-1 bg-neutral-50 shrink-0 h-12 items-center">
+              <button
+                type="button"
+                onClick={() => setViewMode("kanban")}
+                className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                  viewMode === "kanban"
+                    ? "bg-neutral-900 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-800"
+                }`}
+              >
+                CRM Kanban
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-neutral-900 text-white shadow-sm"
+                    : "text-neutral-400 hover:text-neutral-800"
+                }`}
+              >
+                Grade
+              </button>
+            </div>
             {/* Status filters */}
             <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-sm px-4 h-12">
               <Filter className="h-4 w-4 text-neutral-400 shrink-0" />
@@ -899,7 +871,6 @@ export default function CompliancePage() {
             </Button>
           </div>
         </Card>
-
         {/* E.C. Listing table/cards */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -907,53 +878,99 @@ export default function CompliancePage() {
             <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest">Carregando credenciamentos...</p>
           </div>
         ) : establishments.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-            {establishments.map((ec) => (
-              <Card
-                key={ec.id}
-                onClick={() => handleSelectEc(ec.id)}
-                className="bg-white border border-neutral-100 shadow-xl rounded-sm hover:-translate-y-1.5 hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col justify-between"
-              >
-                <div className="p-6 md:p-8 space-y-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <h3 className="font-black text-[#0c0a09] text-xl leading-tight hover:text-brand-accent transition-colors" title={ec.nomeFantasia}>{ec.nomeFantasia}</h3>
-                      <p className="text-[10px] text-neutral-400 font-mono">{ec.cnpjCpf}</p>
+          viewMode === "kanban" ? (
+           
+            <div className="flex flex-row overflow-x-auto gap-6 items-start pb-20 w-full scrollbar-thin">
+              <KanbanColumn
+                title="Pendentes"
+                count={establishments.filter(e => e.status === "pending").length}
+                status="pending"
+                colorClass="border-t-amber-500 bg-amber-500/5"
+                accentColor="text-amber-600 bg-amber-50"
+                items={establishments.filter(e => e.status === "pending")}
+                onSelect={handleSelectEc}
+                maskAgentName={maskAgentName}
+              />
+              <KanbanColumn
+                title="Em Análise Nível 2"
+                count={establishments.filter(e => e.status === "pending_level_2").length}
+                status="pending_level_2"
+                colorClass="border-t-blue-500 bg-blue-500/5"
+                accentColor="text-blue-600 bg-blue-50"
+                items={establishments.filter(e => e.status === "pending_level_2")}
+                onSelect={handleSelectEc}
+                maskAgentName={maskAgentName}
+              />
+              <KanbanColumn
+                title="Aprovados"
+                count={establishments.filter(e => e.status === "approved").length}
+                status="approved"
+                colorClass="border-t-emerald-500 bg-emerald-500/5"
+                accentColor="text-emerald-600 bg-emerald-50"
+                items={establishments.filter(e => e.status === "approved")}
+                onSelect={handleSelectEc}
+                maskAgentName={maskAgentName}
+              />
+              <KanbanColumn
+                title="Reprovados"
+                count={establishments.filter(e => e.status === "rejected").length}
+                status="rejected"
+                colorClass="border-t-red-500 bg-red-500/5"
+                accentColor="text-red-600 bg-red-50"
+                items={establishments.filter(e => e.status === "rejected")}
+                onSelect={handleSelectEc}
+                maskAgentName={maskAgentName}
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+              {establishments.map((ec) => (
+                <Card
+                  key={ec.id}
+                  onClick={() => handleSelectEc(ec.id)}
+                  className="bg-white border border-neutral-100 shadow-xl rounded-sm hover:-translate-y-1.5 hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden flex flex-col justify-between"
+                >
+                  <div className="p-6 md:p-8 space-y-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <h3 className="font-black text-[#0c0a09] text-xl leading-tight hover:text-brand-accent transition-colors" title={ec.nomeFantasia}>{ec.nomeFantasia}</h3>
+                        <p className="text-[10px] text-neutral-400 font-mono">{ec.cnpjCpf}</p>
+                      </div>
+                      {getStatusBadge(ec.status)}
                     </div>
-                    {getStatusBadge(ec.status)}
+                    
+                    <div className="space-y-3 pt-2 text-xs">
+                      <div className="flex items-center gap-2.5 text-neutral-500">
+                        <Building className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
+                        <span className="font-bold">{ec.tipoEmpresa} • {ec.tipoEstabelecimento}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-neutral-500">
+                        <MapPin className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
+                        <span className="font-semibold truncate">{ec.cidade} - {ec.state}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-neutral-500">
+                        <Clock className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
+                        <span className="font-semibold">Cadastrado em {new Date(ec.createdAt).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 text-neutral-500">
+                        <User className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
+                        <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[9px]">
+                          Agente: <strong className="text-neutral-700">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong>
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="space-y-3 pt-2 text-xs">
-                    <div className="flex items-center gap-2.5 text-neutral-500">
-                      <Building className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
-                      <span className="font-bold">{ec.tipoEmpresa} • {ec.tipoEstabelecimento}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-neutral-500">
-                      <MapPin className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
-                      <span className="font-semibold truncate">{ec.cidade} - {ec.state}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-neutral-500">
-                      <Clock className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
-                      <span className="font-semibold">Cadastrado em {new Date(ec.createdAt).toLocaleDateString('pt-BR')}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-neutral-500">
-                      <User className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
-                      <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[9px]">
-                        Agente: <strong className="text-neutral-700">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong>
-                      </span>
+                  <div className="px-6 py-4 bg-neutral-50/50 border-t border-neutral-100 flex items-center justify-between group">
+                    <span className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Visualizar Credenciamento</span>
+                    <div className="flex items-center gap-1 text-[var(--brand-accent)] font-black text-[10px] uppercase tracking-wider group-hover:translate-x-1 transition-transform">
+                      Abrir <Eye className="h-4 w-4" />
                     </div>
                   </div>
-                </div>
-                
-                <div className="px-6 py-4 bg-neutral-50/50 border-t border-neutral-100 flex items-center justify-between group">
-                  <span className="text-[9px] font-black text-neutral-400 uppercase tracking-[0.2em]">Visualizar Credenciamento</span>
-                  <div className="flex items-center gap-1 text-[var(--brand-accent)] font-black text-[10px] uppercase tracking-wider group-hover:translate-x-1 transition-transform">
-                    Abrir <Eye className="h-4 w-4" />
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          )
         ) : (
           <Card className="p-16 text-center space-y-6 max-w-xl mx-auto shadow-xl">
             <div className="w-16 h-16 bg-neutral-50 text-neutral-300 rounded-full flex items-center justify-center mx-auto">
@@ -971,7 +988,6 @@ export default function CompliancePage() {
     </div>
   );
 }
-
 // Reusable metadata card slots with Lucide icons
 function InfoItem({ 
   label, 
@@ -994,6 +1010,70 @@ function InfoItem({
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">{label}</p>
         <div className="font-bold text-neutral-800 text-xs truncate leading-tight" title={typeof value === 'string' ? value : undefined}>{value}</div>
+      </div>
+    </div>
+  );
+}
+// Kanban Column component for CRM View
+function KanbanColumn({
+  title,
+  count,
+  colorClass,
+  accentColor,
+  items,
+  onSelect,
+  maskAgentName
+}: {
+  title: string;
+  count: number;
+  status: string;
+  colorClass: string;
+  accentColor: string;
+  items: any[];
+  onSelect: (id: string) => void;
+  maskAgentName: (name?: string) => string;
+}) {
+  return (
+    <div className={`rounded-sm border-t-[4px] border border-neutral-150/60 bg-white shadow-lg flex flex-col p-4 space-y-4 max-h-[600px] xl:max-h-[700px] shrink-0 flex-1 min-w-[280px] sm:min-w-[300px] md:min-w-[320px] max-w-sm ${colorClass}`}>
+      <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+        <h4 className="text-[11px] font-black text-[#0c0a09] uppercase tracking-wider">{title}</h4>
+        <span className={`text-[9px] font-black px-2 py-0.5 rounded-sm ${accentColor}`}>{count}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin max-h-[500px] xl:max-h-[600px]">
+        {items.length > 0 ? (
+          items.map(ec => (
+            <div
+              key={ec.id}
+              onClick={() => onSelect(ec.id)}
+              className="p-4 bg-neutral-50/50 hover:bg-neutral-50 border border-neutral-200/60 rounded-sm shadow-sm hover:shadow-md transition-all cursor-pointer space-y-3 relative group"
+            >
+              <div className="space-y-1">
+                <h5 className="font-black text-neutral-800 text-xs leading-snug uppercase group-hover:text-brand-accent transition-colors truncate" title={ec.nomeFantasia}>
+                  {ec.nomeFantasia}
+                </h5>
+                <p className="text-[8.5px] text-neutral-400 font-mono leading-none">{ec.cnpjCpf}</p>
+              </div>
+              <div className="space-y-1.5 text-[9.5px] text-neutral-500">
+                <div className="flex items-center gap-1.5 truncate">
+                  <MapPin className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span className="font-semibold truncate">{ec.cidade} - {ec.state}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span>{new Date(ec.createdAt).toLocaleDateString('pt-BR')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <User className="h-3 w-3 text-neutral-400 shrink-0" />
+                  <span className="truncate">Agente: <strong className="text-neutral-600">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong></span>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="py-8 text-center text-[9px] text-neutral-400 font-bold uppercase tracking-wider italic">
+            Sem credenciamentos
+          </div>
+        )}
       </div>
     </div>
   );

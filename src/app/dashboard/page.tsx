@@ -276,7 +276,7 @@ export default function DashboardHome() {
                 <div className="p-4 bg-neutral-50 rounded-sm border border-neutral-100 flex items-center justify-between group cursor-pointer hover:bg-neutral-100/50 transition-colors">
                   <div className="space-y-1">
                     <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">E-mail de Suporte</p>
-                    <p className="text-sm font-black text-[#0c0a09]">agentes@g8pay.com.br</p>
+                    <p className="text-sm font-black text-[#0c0a09]">sac@g8pay.com.br</p>
                   </div>
                   <ChevronRight className="h-5 w-5 text-neutral-300 group-hover:text-brand-accent transition-colors" />
                 </div>

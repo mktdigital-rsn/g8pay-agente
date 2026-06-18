@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import { 
   Search,
@@ -40,7 +39,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-
 type Establishment = {
   id: string;
   agentId: string;
@@ -75,7 +73,6 @@ type Establishment = {
   createdAt: string;
   updatedAt: string;
 };
-
 type EstablishmentDocument = {
   id: string;
   name: string;
@@ -84,11 +81,9 @@ type EstablishmentDocument = {
   status: "pending" | "approved" | "rejected" | "revisions";
   observations?: string;
 };
-
 type EstablishmentDetails = Establishment & {
   documents: EstablishmentDocument[];
 };
-
 export default function MeusClientesPage() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,13 +93,11 @@ export default function MeusClientesPage() {
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
-
   // Document Preview States
   const [activePreviewDoc, setActivePreviewDoc] = useState<EstablishmentDocument | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const fetchMyEstablishments = async () => {
     setLoading(true);
     try {
@@ -134,16 +127,13 @@ export default function MeusClientesPage() {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     fetchMyEstablishments();
   }, [filterStatus]);
-
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchMyEstablishments();
   };
-
   const handleSelectEc = async (id: string) => {
     setLoadingDetails(true);
     
@@ -153,7 +143,6 @@ export default function MeusClientesPage() {
       setPreviewBlobUrl(null);
     }
     setActivePreviewDoc(null);
-
     try {
       const res = await api.get(`/api/establishments/${id}`);
       if (res.data && res.data.success) {
@@ -166,7 +155,6 @@ export default function MeusClientesPage() {
       setLoadingDetails(false);
     }
   };
-
   const handlePreviewDoc = async (doc: EstablishmentDocument) => {
     if (activePreviewDoc?.id === doc.id) return;
     
@@ -192,7 +180,6 @@ export default function MeusClientesPage() {
       setIsPreviewLoading(false);
     }
   };
-
   // Clean up blob URL on unmount
   useEffect(() => {
     return () => {
@@ -201,7 +188,6 @@ export default function MeusClientesPage() {
       }
     };
   }, [previewBlobUrl]);
-
   const parseJsonList = (jsonStr: string) => {
     try {
       return JSON.parse(jsonStr) || [];
@@ -209,7 +195,6 @@ export default function MeusClientesPage() {
       return [];
     }
   };
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "approved":
@@ -222,7 +207,6 @@ export default function MeusClientesPage() {
         return <Badge className="bg-amber-50 text-amber-600 border border-amber-200 uppercase px-2 py-0.5 font-black text-[8px] tracking-wider rounded-sm shadow-sm">Pendente</Badge>;
     }
   };
-
   const getDocStatusBadge = (status: string) => {
     switch (status) {
       case "approved":
@@ -251,7 +235,6 @@ export default function MeusClientesPage() {
         );
     }
   };
-
   return (
     <div className="p-4 sm:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] no-scrollbar">
       {selectedEc ? (
@@ -277,7 +260,6 @@ export default function MeusClientesPage() {
               </p>
             </div>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-20">
             {/* Left Column: Register Data, Address & Risk Assessment */}
             <div className="lg:col-span-6 space-y-8">
@@ -301,10 +283,9 @@ export default function MeusClientesPage() {
                       </h2>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <InfoItem label="CNPJ/CPF" value={selectedEc.cnpjCpf} icon={FileText} className="sm:col-span-2" />
-                    <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} />
+                    <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} className="sm:col-span-2" />
                     <InfoItem label="Tipo Estabelecimento" value={selectedEc.tipoEstabelecimento} icon={User} />
                     <InfoItem label="Tipo de Empresa" value={selectedEc.tipoEmpresa} icon={Building} />
                     <InfoItem label="Contato Principal" value={selectedEc.contatoPrincipal} icon={Phone} />
@@ -315,19 +296,17 @@ export default function MeusClientesPage() {
                     <InfoItem label="CNAE Principal" value={selectedEc.cnae} icon={Briefcase} />
                     <InfoItem label="MCC" value={selectedEc.mcc} icon={Hash} />
                     <InfoItem label="Shopping?" value={selectedEc.shopping === "Sim" ? `Sim (${selectedEc.descricaoShopping || ''})` : "Não"} icon={Building2} className="sm:col-span-2" />
-                    <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} />
+                   <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} className="sm:col-span-2" />
                   </div>
                 </div>
               </Card>
-
               {/* 2. ENDEREÇO DE INSTALAÇÃO (Isolated in a new Card below Dados Cadastrais) */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
                 </h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                  <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2 md:col-span-3" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
                   <InfoItem label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
                   <InfoItem label="Bairro" value={selectedEc.bairro} icon={MapPin} />
                   <InfoItem label="Cidade" value={selectedEc.cidade} icon={Map} />
@@ -335,13 +314,11 @@ export default function MeusClientesPage() {
                   <InfoItem label="CEP" value={selectedEc.cep} icon={Hash} />
                 </div>
               </Card>
-
               {/* 3. RISCO & SEGURANÇA CARD */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-red-500 shadow-xl space-y-6">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <ShieldAlert className="h-5 w-5 text-red-500" /> Risco & Segurança
                 </h3>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InfoItem 
                     label="Score de Crédito" 
@@ -365,7 +342,6 @@ export default function MeusClientesPage() {
                       </span>
                     } 
                   />
-
                   <InfoItem 
                     label="Processos Judiciais" 
                     icon={FileSearch}
@@ -375,7 +351,6 @@ export default function MeusClientesPage() {
                       </a>
                     } 
                   />
-
                   <InfoItem 
                     label="Reputação Online" 
                     icon={Globe}
@@ -388,7 +363,6 @@ export default function MeusClientesPage() {
                 </div>
               </Card>
             </div>
-
             {/* Right Column: Financial Data, Compliance Observs & Documents */}
             <div className="lg:col-span-6 space-y-8">
               
@@ -397,13 +371,11 @@ export default function MeusClientesPage() {
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
                 </h3>
-
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
                   <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
                   <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
                 </div>
-
                 {/* Bank details unified inside the card */}
                 <div className="bg-neutral-50/50 p-4 border border-neutral-100 rounded-sm space-y-3">
                   <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -421,7 +393,6 @@ export default function MeusClientesPage() {
                     <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta informada.</p>
                   )}
                 </div>
-
                 {/* Methods & Chart */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
                   <div className="space-y-2">
@@ -432,7 +403,6 @@ export default function MeusClientesPage() {
                       <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
                     </div>
                   </div>
-
                   <div>
                     <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                       <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
@@ -445,7 +415,6 @@ export default function MeusClientesPage() {
                   </div>
                 </div>
               </Card>
-
               {/* 2. COMPLIANCE OBSERVATIONS */}
               {selectedEc.observations && (
                 <Card className="p-6 bg-red-50 border border-red-100 rounded-sm shadow-md space-y-3">
@@ -460,13 +429,11 @@ export default function MeusClientesPage() {
                   </p>
                 </Card>
               )}
-
               {/* 3. VALIDAÇÃO DE DOCUMENTOS CARD */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <FileText className="h-5 w-5 text-brand-accent" /> Status dos Documentos e Previsão
                 </h3>
-
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
                   
                   {/* Documents List */}
@@ -521,7 +488,6 @@ export default function MeusClientesPage() {
                       <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
                     )}
                   </div>
-
                   {/* Document Preview Pane */}
                   <div className="xl:col-span-5 bg-neutral-50 border border-neutral-100 rounded-sm p-3 flex flex-col justify-between items-stretch h-[250px]">
                     <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5 mb-1.5 shrink-0">
@@ -536,7 +502,6 @@ export default function MeusClientesPage() {
                         </button>
                       )}
                     </div>
-
                     {isPreviewLoading ? (
                       <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-8 shrink-0">
                         <Loader2 className="h-5 w-5 text-brand-accent animate-spin" />
@@ -554,7 +519,6 @@ export default function MeusClientesPage() {
                             <Eye className="h-3 w-3" /> Clique para Ampliar
                           </span>
                         </div>
-
                         {activePreviewDoc?.mimeType.startsWith("image/") ? (
                           <img 
                             src={previewBlobUrl} 
@@ -605,7 +569,6 @@ export default function MeusClientesPage() {
               Monitore os credenciamentos comerciais solicitados por você
             </p>
           </div>
-
           {/* Quick Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
             <MetricCard 
@@ -632,7 +595,6 @@ export default function MeusClientesPage() {
               colorClass="border-l-red-500"
             />
           </div>
-
           {/* Search and Filters */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 bg-white border border-neutral-100 rounded-sm shadow-sm">
             <form onSubmit={handleSearch} className="flex-1 flex gap-2">
@@ -650,7 +612,6 @@ export default function MeusClientesPage() {
                 Buscar
               </Button>
             </form>
-
             <div className="flex gap-2">
               <FilterButton active={filterStatus === ""} onClick={() => setFilterStatus("")} label="Todos" />
               <FilterButton active={filterStatus === "pending"} onClick={() => setFilterStatus("pending")} label="Pendentes" />
@@ -658,7 +619,6 @@ export default function MeusClientesPage() {
               <FilterButton active={filterStatus === "rejected"} onClick={() => setFilterStatus("rejected")} label="Pendências" />
             </div>
           </div>
-
           {/* Client list grid */}
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -676,7 +636,6 @@ export default function MeusClientesPage() {
                         {new Date(ec.createdAt).toLocaleDateString("pt-BR")}
                       </span>
                     </div>
-
                     <div>
                       <h3 className="text-lg font-black text-neutral-800 uppercase tracking-tight leading-tight truncate group-hover:text-brand-accent transition-colors">
                         {ec.nomeFantasia}
@@ -685,7 +644,6 @@ export default function MeusClientesPage() {
                         {ec.razaoSocial || "---"}
                       </p>
                     </div>
-
                     <div className="space-y-1 text-xs text-neutral-600 pt-2 border-t border-neutral-50">
                       <div className="flex justify-between">
                         <span className="text-neutral-400 uppercase font-bold text-[9px] tracking-wider">CNPJ/CPF:</span>
@@ -701,7 +659,6 @@ export default function MeusClientesPage() {
                       </div>
                     </div>
                   </div>
-
                   <Button
                     onClick={() => handleSelectEc(ec.id)}
                     className="w-full h-10 bg-neutral-50 hover:bg-neutral-900 hover:text-white border border-neutral-200 text-[#0c0a09] rounded-sm text-[10px] font-black uppercase tracking-widest transition-all mt-2 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
@@ -722,7 +679,6 @@ export default function MeusClientesPage() {
           )}
         </div>
       )}
-
       {/* Fullscreen Preview Modal */}
       {isModalOpen && activePreviewDoc && previewBlobUrl && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -787,7 +743,6 @@ export default function MeusClientesPage() {
     </div>
   );
 }
-
 // Sub-components
 function MetricCard({ title, value, icon, colorClass = "border-l-neutral-400" }: { title: string; value: number; icon: React.ReactNode; colorClass?: string }) {
   return (
@@ -802,7 +757,6 @@ function MetricCard({ title, value, icon, colorClass = "border-l-neutral-400" }:
     </Card>
   );
 }
-
 function FilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button
@@ -818,7 +772,6 @@ function FilterButton({ active, onClick, label }: { active: boolean; onClick: ()
     </button>
   );
 }
-
 // Reusable metadata card slots with Lucide icons
 function InfoItem({ 
   label, 

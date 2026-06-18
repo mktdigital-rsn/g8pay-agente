@@ -175,6 +175,15 @@ export default function MaquininhasPage() {
     fetchBanks();
   }, []);
 
+  useEffect(() => {
+    // Scroll all potential scrollable elements/containers to the top
+    const containers = document.querySelectorAll(".maquininhas-container, .overflow-y-auto, main");
+    containers.forEach(el => {
+      el.scrollTop = 0;
+    });
+    window.scrollTo(0, 0);
+  }, [step]);
+
   const normalizeFileName = (type: string, originalName: string) => {
     const extension = originalName.split('.').pop();
     const cleanType = type.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -196,12 +205,50 @@ export default function MaquininhasPage() {
         const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
         const data = await res.json();
         if (data && !data.message) {
+          // Parse tipoEmpresa based on porte, opcao_pelo_mei, natureza_juridica
+          let parsedTipoEmpresa = "";
+          if (data.opcao_pelo_mei === true) {
+            parsedTipoEmpresa = "MEI";
+          } else if (data.natureza_juridica && (data.natureza_juridica.toLowerCase().includes("limitada") || data.natureza_juridica.toLowerCase().includes("ltda"))) {
+            parsedTipoEmpresa = "LTDA";
+          } else if (data.natureza_juridica && (data.natureza_juridica.toLowerCase().includes("anônima") || data.natureza_juridica.toLowerCase().includes("s/a") || data.natureza_juridica.toLowerCase().includes("s.a."))) {
+            parsedTipoEmpresa = "S.A.";
+          } else if (data.porte === "MICRO EMPRESA" || data.codigo_porte === 1) {
+            parsedTipoEmpresa = "ME";
+          } else if (data.porte === "EMPRESA DE PEQUENO PORTE" || data.codigo_porte === 3) {
+            parsedTipoEmpresa = "EPP";
+          }
+
+          // Phone numbers
+          let parsedPhone = "";
+          if (data.ddd_telefone_1) {
+            parsedPhone = maskPhone(data.ddd_telefone_1);
+          } else if (data.ddd_telefone_2) {
+            parsedPhone = maskPhone(data.ddd_telefone_2);
+          }
+
+          // Parse capital social to faturamentoMensal
+          let parsedFaturamento = "";
+          if (data.capital_social) {
+            parsedFaturamento = new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(data.capital_social);
+          }
+
           setFormData(prev => ({
             ...prev,
+            tipoEstabelecimento: "Pessoa Jurídica",
             razaoSocial: data.razao_social || prev.razaoSocial,
             nomeFantasia: data.nome_fantasia || data.razao_social || prev.nomeFantasia,
-            cnae: data.cnae_fiscal || prev.cnae,
-            cep: data.cep || prev.cep,
+            tipoEmpresa: parsedTipoEmpresa || prev.tipoEmpresa,
+            contatoPrincipal: parsedPhone || prev.contatoPrincipal,
+            dataFundacao: data.data_inicio_atividade || prev.dataFundacao,
+            mcc: data.codigo_municipio ? String(data.codigo_municipio) : (data.codigo_municipio_ibge ? String(data.codigo_municipio_ibge) : prev.mcc),
+            cnae: data.cnae_fiscal ? String(data.cnae_fiscal) : prev.cnae,
+            faturamentoMensal: parsedFaturamento || prev.faturamentoMensal,
+            tipoEndereco: "Comercial",
+            cep: data.cep ? maskCep(data.cep) : prev.cep,
             rua: data.logradouro || prev.rua,
             numero: data.numero || prev.numero,
             complemento: data.complemento || prev.complemento,
@@ -721,7 +768,50 @@ export default function MaquininhasPage() {
                 </div>
               </Card>
 
-              {/* Informações Financeiras */}
+              {/* Endereço */}
+              <Card className="p-8 border-l-[6px] border-l-amber-600 shadow-xl space-y-8">
+                <div className="flex items-center gap-3 border-b border-neutral-100 pb-5">
+                  <div className="w-10 h-10 bg-amber-600 rounded-[2px] flex items-center justify-center">
+                    <MapPin className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">Endereço</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  <FormSelect
+                    label="Tipo de Endereço"
+                    required
+                    value={formData.tipoEndereco}
+                    onChange={(v) => updateField("tipoEndereco", v)}
+                    options={["Comercial", "Residencial", "Cobranca"]}
+                  />
+                  <div className="space-y-2">
+                    <FormField label="CEP" required value={formData.cep} onChange={(v) => handleCepChange(v)} placeholder="XXXXX-XXX" />
+                    <p className="text-[9px] text-neutral-400 font-bold uppercase italic tracking-widest leading-none">
+                      {isSearchingCep ? "Buscando dados..." : "Digite o CEP para buscar automaticamente"}
+                    </p>
+                  </div>
+                  <FormField label="Rua" required value={formData.rua} onChange={(v) => updateField("rua", v)} placeholder="Nome da Rua / Av" />
+
+                  <FormField label="Número" required value={formData.numero} onChange={(v) => updateField("numero", v)} placeholder="000" />
+                  <FormField label="Complemento" value={formData.complemento} onChange={(v) => updateField("complemento", v)} placeholder="Sala, Loja, etc" />
+                  <FormField label="Bairro" required value={formData.bairro} onChange={(v) => updateField("bairro", v)} placeholder="Bairro" />
+
+                  <FormField label="Cidade" required value={formData.cidade} onChange={(v) => updateField("cidade", v)} placeholder="Cidade" />
+                  <FormSelect
+                    label="Estado"
+                    required
+                    value={formData.estado}
+                    onChange={(v) => updateField("estado", v)}
+                    options={["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]}
+                  />
+                  <div className="space-y-2">
+                    <FormField label="País" required value={formData.pais} onChange={(v) => updateField("pais", v)} />
+                    <p className="text-[9px] text-neutral-400 font-bold uppercase italic tracking-widest leading-none">Nome do País</p>
+                  </div>
+                </div>
+              </Card>
+
               {/* Informações Financeiras */}
               <Card className="p-8 border-l-[6px] border-l-blue-500 shadow-xl space-y-8">
                 <div className="flex items-center gap-3 border-b border-neutral-100 pb-5">
@@ -741,52 +831,6 @@ export default function MaquininhasPage() {
                     onChange={(v) => updateField("antecipacaoRecebiveis", v)}
                     options={["Sim", "Não"]}
                   />
-                </div>
-              </Card>
-
-              {/* Contatos */}
-              <Card className="p-8 border-l-[6px] border-l-green-500 shadow-xl space-y-8">
-                <div className="flex items-center justify-between border-b border-neutral-100 pb-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-500 rounded-sm flex items-center justify-center">
-                      <Smartphone className="h-5 w-5 text-white" />
-                    </div>
-                    <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">Contatos</h3>
-                  </div>
-                  <Button onClick={addContato} className="bg-green-600 hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-[0.2em] px-6 rounded-[4px]">
-                    + Adicionar Contato
-                  </Button>
-                </div>
-
-                <div className="space-y-8">
-                  {formData.contatos.map((contato, idx) => (
-                    <div key={idx} className="p-8 bg-neutral-50/50 rounded-[2px] border-2 border-dashed border-neutral-200 relative group animate-in fade-in duration-300">
-                      <div className="absolute top-4 right-4 flex items-center gap-4">
-                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-neutral-100 shadow-sm">Contato {idx + 1}</span>
-                        {formData.contatos.length > 1 && (
-                          <Button variant="destructive" size="sm" onClick={() => removeContato(idx)} className="h-8 text-[9px] font-black uppercase tracking-widest px-4 rounded-[2px]">Remover</Button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
-                        <FormField label="Nome" required value={contato.nome} onChange={(v) => updateContato(idx, "nome", v)} placeholder="Nome completo" />
-                        <FormField label="CPF" required value={contato.cpf} onChange={(v) => updateContato(idx, "cpf", maskCpfCnpj(v))} placeholder="XXX.XXX.XXX-XX" />
-                        <FormField label="Email" required value={contato.email} onChange={(v) => updateContato(idx, "email", v)} placeholder="nome@email.com" />
-
-                        <FormSelect
-                          label="Tipo de Responsável"
-                          required
-                          value={contato.tipoResponsavel}
-                          onChange={(v) => updateContato(idx, "tipoResponsavel", v)}
-                          options={["Sócio", "Diretor", "Procurador", "Outros"]}
-                        />
-                        <FormField label="Data de Nascimento" type="date" required value={contato.dataNascimento} onChange={(v) => updateContato(idx, "dataNascimento", v)} />
-                        <FormField label="Nacionalidade" required value={contato.nacionalidade} onChange={(v) => updateContato(idx, "nacionalidade", v)} placeholder="Brasileira" />
-
-                        <FormField label="Função" required value={contato.funcao} onChange={(v) => updateContato(idx, "funcao", v)} placeholder="Ex: Administrador" />
-                        <FormField label="Telefone" required value={contato.telefone} onChange={(v) => updateContato(idx, "telefone", maskPhone(v))} placeholder="(XX) X XXXX-XXXX" />
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </Card>
 
@@ -845,47 +889,49 @@ export default function MaquininhasPage() {
                 </div>
               </Card>
 
-              {/* Endereço */}
-              <Card className="p-8 border-l-[6px] border-l-amber-600 shadow-xl space-y-8">
-                <div className="flex items-center gap-3 border-b border-neutral-100 pb-5">
-                  <div className="w-10 h-10 bg-amber-600 rounded-[2px] flex items-center justify-center">
-                    <MapPin className="h-5 w-5 text-white" />
+              {/* Contatos */}
+              <Card className="p-8 border-l-[6px] border-l-green-500 shadow-xl space-y-8">
+                <div className="flex items-center justify-between border-b border-neutral-100 pb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-500 rounded-sm flex items-center justify-center">
+                      <Smartphone className="h-5 w-5 text-white" />
+                    </div>
+                    <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">Contatos</h3>
                   </div>
-                  <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">Endereço</h3>
+                  <Button onClick={addContato} className="bg-green-600 hover:bg-green-700 text-white font-black text-[10px] uppercase tracking-[0.2em] px-6 rounded-[4px]">
+                    + Adicionar Contato
+                  </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  <FormSelect
-                    label="Tipo de Endereço"
-                    required
-                    value={formData.tipoEndereco}
-                    onChange={(v) => updateField("tipoEndereco", v)}
-                    options={["Comercial", "Residencial", "Cobranca"]}
-                  />
-                  <div className="space-y-2">
-                    <FormField label="CEP" required value={formData.cep} onChange={(v) => handleCepChange(v)} placeholder="XXXXX-XXX" />
-                    <p className="text-[9px] text-neutral-400 font-bold uppercase italic tracking-widest leading-none">
-                      {isSearchingCep ? "Buscando dados..." : "Digite o CEP para buscar automaticamente"}
-                    </p>
-                  </div>
-                  <FormField label="Rua" required value={formData.rua} onChange={(v) => updateField("rua", v)} placeholder="Nome da Rua / Av" />
+                <div className="space-y-8">
+                  {formData.contatos.map((contato, idx) => (
+                    <div key={idx} className="p-8 bg-neutral-50/50 rounded-[2px] border-2 border-dashed border-neutral-200 relative group animate-in fade-in duration-300">
+                      <div className="absolute top-4 right-4 flex items-center gap-4">
+                        <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-neutral-100 shadow-sm">Contato {idx + 1}</span>
+                        {formData.contatos.length > 1 && (
+                          <Button variant="destructive" size="sm" onClick={() => removeContato(idx)} className="h-8 text-[9px] font-black uppercase tracking-widest px-4 rounded-[2px]">Remover</Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
+                        <FormField label="Nome" required value={contato.nome} onChange={(v) => updateContato(idx, "nome", v)} placeholder="Nome completo" />
+                        <FormField label="CPF" required value={contato.cpf} onChange={(v) => updateContato(idx, "cpf", maskCpfCnpj(v))} placeholder="XXX.XXX.XXX-XX" />
+                        <FormField label="Email" required value={contato.email} onChange={(v) => updateContato(idx, "email", v)} placeholder="nome@email.com" />
 
-                  <FormField label="Número" required value={formData.numero} onChange={(v) => updateField("numero", v)} placeholder="000" />
-                  <FormField label="Complemento" value={formData.complemento} onChange={(v) => updateField("complemento", v)} placeholder="Sala, Loja, etc" />
-                  <FormField label="Bairro" required value={formData.bairro} onChange={(v) => updateField("bairro", v)} placeholder="Bairro" />
+                        <FormSelect
+                          label="Tipo de Responsável"
+                          required
+                          value={contato.tipoResponsavel}
+                          onChange={(v) => updateContato(idx, "tipoResponsavel", v)}
+                          options={["Sócio", "Diretor", "Procurador", "Outros"]}
+                        />
+                        <FormField label="Data de Nascimento" type="date" required value={contato.dataNascimento} onChange={(v) => updateContato(idx, "dataNascimento", v)} />
+                        <FormField label="Nacionalidade" required value={contato.nacionalidade} onChange={(v) => updateContato(idx, "nacionalidade", v)} placeholder="Brasileira" />
 
-                  <FormField label="Cidade" required value={formData.cidade} onChange={(v) => updateField("cidade", v)} placeholder="Cidade" />
-                  <FormSelect
-                    label="Estado"
-                    required
-                    value={formData.estado}
-                    onChange={(v) => updateField("estado", v)}
-                    options={["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"]}
-                  />
-                  <div className="space-y-2">
-                    <FormField label="País" required value={formData.pais} onChange={(v) => updateField("pais", v)} />
-                    <p className="text-[9px] text-neutral-400 font-bold uppercase italic tracking-widest leading-none">Nome do País</p>
-                  </div>
+                        <FormField label="Função" required value={contato.funcao} onChange={(v) => updateContato(idx, "funcao", v)} placeholder="Ex: Administrador" />
+                        <FormField label="Telefone" required value={contato.telefone} onChange={(v) => updateContato(idx, "telefone", maskPhone(v))} placeholder="(XX) X XXXX-XXXX" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
 
@@ -1106,15 +1152,14 @@ export default function MaquininhasPage() {
                   </div>
                 </ConfirmSection>
 
-                <ConfirmSection title="Contatos Associados">
-                  <div className="space-y-4">
-                    {formData.contatos.map((c, i) => (
-                      <div key={i} className="p-4 bg-neutral-50 rounded-[2px] border border-neutral-100 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <ConfirmRow label="Nome" value={c.nome} />
-                        <ConfirmRow label="CPF" value={c.cpf} />
-                        <ConfirmRow label="Telefone" value={c.telefone} />
-                      </div>
-                    ))}
+                <ConfirmSection title="Endereço de Instalação">
+                  <div className="p-6 border-2 border-dashed border-neutral-100 rounded-[2px] space-y-4">
+                    <ConfirmRow label="Logradouro" value={`${formData.rua}, ${formData.numero}${formData.complemento ? ` - ${formData.complemento}` : ""}`} />
+                    <div className="grid grid-cols-3 gap-6">
+                      <ConfirmRow label="CEP" value={formData.cep} />
+                      <ConfirmRow label="Bairro" value={formData.bairro} />
+                      <ConfirmRow label="Cidade/UF" value={`${formData.cidade} - ${formData.estado}`} />
+                    </div>
                   </div>
                 </ConfirmSection>
 
@@ -1130,14 +1175,15 @@ export default function MaquininhasPage() {
                   </div>
                 </ConfirmSection>
 
-                <ConfirmSection title="Endereço de Instalação">
-                  <div className="p-6 border-2 border-dashed border-neutral-100 rounded-[2px] space-y-4">
-                    <ConfirmRow label="Logradouro" value={`${formData.rua}, ${formData.numero}${formData.complemento ? ` - ${formData.complemento}` : ""}`} />
-                    <div className="grid grid-cols-3 gap-6">
-                      <ConfirmRow label="CEP" value={formData.cep} />
-                      <ConfirmRow label="Bairro" value={formData.bairro} />
-                      <ConfirmRow label="Cidade/UF" value={`${formData.cidade} - ${formData.estado}`} />
-                    </div>
+                <ConfirmSection title="Contatos Associados">
+                  <div className="space-y-4">
+                    {formData.contatos.map((c, i) => (
+                      <div key={i} className="p-4 bg-neutral-50 rounded-[2px] border border-neutral-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <ConfirmRow label="Nome" value={c.nome} />
+                        <ConfirmRow label="CPF" value={c.cpf} />
+                        <ConfirmRow label="Telefone" value={c.telefone} />
+                      </div>
+                    ))}
                   </div>
                 </ConfirmSection>
 
