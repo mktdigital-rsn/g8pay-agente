@@ -32,7 +32,8 @@ import {
   Map,
   Briefcase,
   Cpu,
-  Store
+  Store,
+  Upload
 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -228,6 +229,12 @@ export default function MeusClientesPage() {
             <AlertCircle className="h-3 w-3" /> Solicitar Revisão
           </span>
         );
+      case "not_sent":
+        return (
+          <span className="inline-flex items-center gap-1 text-[9px] font-black text-neutral-500 uppercase bg-neutral-100 px-2 py-0.5 rounded-sm border border-neutral-200">
+            <XCircle className="h-3 w-3 text-neutral-400" /> Não Enviado
+          </span>
+        );
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[9px] font-black text-neutral-400 uppercase bg-neutral-50 px-2 py-0.5 rounded-sm border border-neutral-100">
@@ -236,6 +243,47 @@ export default function MeusClientesPage() {
         );
     }
   };
+  const contacts = selectedEc ? parseJsonList(selectedEc.contactsJson) : [];
+  const bankAccounts = selectedEc ? parseJsonList(selectedEc.bankAccountsJson) : [];
+  const scoreVal = selectedEc ? 600 + (selectedEc.id.charCodeAt(0) % 350) : 600;
+  const hasFraudHistory = selectedEc ? selectedEc.id.charCodeAt(1) % 2 === 0 : false;
+
+  const [isUploadingReplacement, setIsUploadingReplacement] = useState(false);
+
+  const handleUploadReplacement = async (docName: string, file: File) => {
+    if (!selectedEc) return;
+    setIsUploadingReplacement(true);
+    const toastId = toast.loading(`Enviando ${docName}...`);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        try {
+          const res = await api.post(`/api/establishments/${selectedEc.id}/documents`, {
+            name: docName,
+            fileName: file.name,
+            base64: base64
+          });
+          if (res.data && res.data.success) {
+            toast.success(`${docName} enviado com sucesso!`, { id: toastId });
+            // Refresh details
+            handleSelectEc(selectedEc.id);
+          } else {
+            throw new Error(res.data?.error || "Erro ao salvar documento.");
+          }
+        } catch (err: any) {
+          console.error("Error uploading document replacement:", err);
+          toast.error(err.response?.data?.error || err.message || "Erro ao conectar com o servidor.", { id: toastId });
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (e: any) {
+      toast.error("Erro ao ler o arquivo selecionado.", { id: toastId });
+    } finally {
+      setIsUploadingReplacement(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] no-scrollbar">
       {selectedEc ? (
@@ -261,9 +309,10 @@ export default function MeusClientesPage() {
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-20">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
             {/* Left Column: Register Data, Address & Risk Assessment */}
-            <div className="lg:col-span-6 space-y-8">
+            <div className="lg:col-span-6 space-y-8 flex flex-col h-full">
               
               {/* 1. DADOS CADASTRAIS (Compact, no address, styled with icons/slots) */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
@@ -284,38 +333,78 @@ export default function MeusClientesPage() {
                       </h2>
                     </div>
                   </div>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <InfoItem label="CNPJ/CPF" value={selectedEc.cnpjCpf} icon={FileText} className="sm:col-span-2" />
                     <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} className="sm:col-span-2" />
                     <InfoItem label="Tipo Estabelecimento" value={selectedEc.tipoEstabelecimento} icon={User} />
                     <InfoItem label="Tipo de Empresa" value={selectedEc.tipoEmpresa} icon={Building} />
                     <InfoItem label="Contato Principal" value={selectedEc.contatoPrincipal} icon={Phone} />
-                    <InfoItem label="Contato Secundário" value={parseJsonList(selectedEc.contactsJson)[1]?.telefone || "---"} icon={Phone} />
+                    <InfoItem label="Contato Secundário" value={contacts[1]?.telefone || "---"} icon={Phone} />
                     <InfoItem label="Fundação" value={selectedEc.dataFundacao} icon={Calendar} />
                     <InfoItem label="Horário de Funcionamento" value={selectedEc.horarioFuncionamento} icon={Clock} />
                     <InfoItem label="Site" value={selectedEc.site || "---"} icon={Globe} className="sm:col-span-2" />
                     <InfoItem label="CNAE Principal" value={selectedEc.cnae} icon={Briefcase} />
                     <InfoItem label="MCC" value={selectedEc.mcc} icon={Hash} />
                     <InfoItem label="Shopping?" value={selectedEc.shopping === "Sim" ? `Sim (${selectedEc.descricaoShopping || ''})` : "Não"} icon={Building2} className="sm:col-span-2" />
-                   <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} className="sm:col-span-2" />
+                    <InfoItem label="Máquinas" value={`${selectedEc.quantidade} u. (Padrão G8Pay)`} icon={Cpu} className="sm:col-span-2" />
                   </div>
                 </div>
               </Card>
+
               {/* 2. ENDEREÇO DE INSTALAÇÃO (Isolated in a new Card below Dados Cadastrais) */}
-              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6">
+              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6 flex flex-col flex-1">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InfoItem label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
-                  <InfoItem label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
-                  <InfoItem label="Bairro" value={selectedEc.bairro} icon={MapPin} />
-                  <InfoItem label="Cidade" value={selectedEc.cidade} icon={Map} />
-                  <InfoItem label="Estado / UF" value={selectedEc.state} icon={Map} />
-                  <InfoItem label="CEP" value={selectedEc.cep} icon={Hash} />
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 content-start">
+                  <InfoItem size="lg" label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
+                  <InfoItem size="lg" label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
+                  <InfoItem size="lg" label="Bairro" value={selectedEc.bairro} icon={MapPin} />
+                  <InfoItem size="lg" label="Cidade" value={selectedEc.cidade} icon={Map} />
+                  <InfoItem size="lg" label="Estado / UF" value={selectedEc.state} icon={Map} />
+                  <InfoItem size="lg" label="CEP" value={selectedEc.cep} icon={Hash} />
                 </div>
               </Card>
-              {/* 3. RISCO & SEGURANÇA CARD */}
+            </div>
+
+            {/* Right Column: Financial Data & Aligned Document Compliance */}
+            <div className="lg:col-span-6 space-y-8">
+              
+              {/* 1. INFORMAÇÕES FINANCEIRAS CARD */}
+              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
+                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
+                  <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
+                  <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
+                </div>
+                {/* Meios de Pagamento & Gráfico */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+                  <div className="space-y-2">
+                    <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest">Meios de Pagamento Aceitos</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Pix</Badge>
+                      <Badge className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Crédito</Badge>
+                      <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                      <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
+                    </span>
+                    <div className="flex items-end gap-1 h-14 pt-2 border-b border-neutral-100">
+                      {[35, 50, 42, 68, 55, 62, 85, 70, 78, 92].map((h, i) => (
+                        <div key={i} className="flex-1 bg-brand-accent hover:bg-brand-accent/80 rounded-t-xs transition-all duration-300" style={{ height: `${h}%` }} title={`Mês ${i+1}`} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* 2. RISCO & SEGURANÇA */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-red-500 shadow-xl space-y-6">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
                   <ShieldAlert className="h-5 w-5 text-red-500" /> Risco & Segurança
@@ -326,20 +415,19 @@ export default function MeusClientesPage() {
                     icon={ShieldAlert}
                     value={
                       <div className="flex items-center gap-2">
-                        <span>{600 + (selectedEc.id.charCodeAt(0) % 350)}</span>
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm ${(600 + (selectedEc.id.charCodeAt(0) % 350)) > 750 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                          {(600 + (selectedEc.id.charCodeAt(0) % 350)) > 750 ? 'Excelente' : 'Bom'}
+                        <span>{scoreVal}</span>
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-sm ${scoreVal > 750 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                          {scoreVal > 750 ? 'Excelente' : 'Bom'}
                         </span>
                       </div>
                     } 
                   />
-                  
                   <InfoItem 
                     label="Alerta de Fraude" 
                     icon={AlertTriangle}
                     value={
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-sm ${(selectedEc.id.charCodeAt(1) % 2 === 0) ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {(selectedEc.id.charCodeAt(1) % 2 === 0) ? 'Risco Moderado' : 'Sem Alertas (Baixo Risco)'}
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-sm ${hasFraudHistory ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {hasFraudHistory ? 'Risco Moderado' : 'Sem Alertas (Baixo Risco)'}
                       </span>
                     } 
                   />
@@ -363,203 +451,281 @@ export default function MeusClientesPage() {
                   />
                 </div>
               </Card>
-            </div>
-            {/* Right Column: Financial Data, Compliance Observs & Documents */}
-            <div className="lg:col-span-6 space-y-8">
-              
-              {/* 1. INFORMAÇÕES FINANCEIRAS CARD */}
-              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-500 shadow-xl space-y-6">
+
+              {/* 3. CONTA DE REPASSE */}
+              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-400 shadow-xl space-y-4">
                 <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-blue-500" /> Informações Financeiras e de Repasse
+                  <Building className="h-5 w-5 text-blue-400" /> Conta de Repasse Cadastrada
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <InfoItem label="Faturamento Mensal" value={selectedEc.faturamentoMensal} icon={TrendingUp} />
-                  <InfoItem label="Ticket Médio" value={selectedEc.ticketMedio} icon={CreditCard} />
-                  <InfoItem label="Antecipação" value={selectedEc.antecipacaoRecebiveis} icon={Zap} />
-                </div>
-                {/* Bank details unified inside the card */}
-                <div className="bg-neutral-50/50 p-4 border border-neutral-100 rounded-sm space-y-3">
-                  <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                    <Building className="h-3.5 w-3.5 text-neutral-400" /> Conta de Repasse Cadastrada
-                  </span>
-                  {parseJsonList(selectedEc.bankAccountsJson).length > 0 ? (
-                    parseJsonList(selectedEc.bankAccountsJson).map((b: any, idx: number) => (
-                      <div key={idx} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <InfoItem label="Banco" value={b.banco || "---"} icon={Building} className="sm:col-span-2" />
+                {bankAccounts.length > 0 ? (
+                  bankAccounts.map((b: any, idx: number) => (
+                    <div key={idx} className="space-y-3">
+                      <div className="flex items-center gap-4 p-4 bg-blue-50/40 border border-blue-100 rounded-sm">
+                        <div className="p-3 bg-blue-500 rounded-sm text-white shrink-0">
+                          <Building className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-0.5">Banco</span>
+                          <span className="text-base font-black text-[#0c0a09]">{b.banco || "---"}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
                         <InfoItem label="Agência / Conta" value={`${b.agencia || '---'} / ${b.conta || '---'}-${b.digito || ''}`} icon={Hash} />
                         <InfoItem label="Tipo de Conta" value={b.tipoConta || "---"} icon={CreditCard} />
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta informada.</p>
-                  )}
-                </div>
-                {/* Methods & Chart */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
-                  <div className="space-y-2">
-                    <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest">Meios de Pagamento Aceitos</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Pix</Badge>
-                      <Badge className="bg-blue-50 text-blue-700 border border-blue-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Crédito</Badge>
-                      <Badge className="bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">Débito</Badge>
                     </div>
+                  ))
+                ) : (
+                  <div className="py-6 text-center space-y-2">
+                    <Building className="h-8 w-8 text-neutral-300 mx-auto" />
+                    <p className="text-xs text-neutral-400 italic font-semibold">Nenhuma conta bancária informada.</p>
                   </div>
-                  <div>
-                    <span className="block text-[9px] font-black text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                      <TrendingUp className="h-3.5 w-3.5 text-neutral-400" /> Histórico de Faturamento
-                    </span>
-                    <div className="flex items-end gap-1 h-12 pt-2 border-b border-neutral-100">
-                      {[35, 50, 42, 68, 55, 62, 85, 70, 78, 92].map((h, i) => (
-                        <div key={i} className="flex-1 bg-brand-accent hover:bg-brand-accent/80 rounded-t-xs transition-all duration-300" style={{ height: `${h}%` }} title={`Mês ${i+1}`} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                )}
               </Card>
-              {/* 2. COMPLIANCE OBSERVATIONS */}
-              {selectedEc.observations && (
-                <Card className="p-6 bg-red-50 border border-red-100 rounded-sm shadow-md space-y-3">
-                  <h4 className="text-xs font-black text-red-700 uppercase tracking-widest flex items-center gap-1.5">
-                    <AlertCircle className="h-4 w-4" /> Observações do Compliance
-                  </h4>
-                  <p className="text-xs text-red-900 leading-relaxed italic">
-                    "{selectedEc.observations}"
-                  </p>
-                  <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
-                    Por favor, verifique abaixo os documentos com pendências e envie os ajustes necessários.
-                  </p>
-                </Card>
-              )}
-              {/* 3. VALIDAÇÃO DE DOCUMENTOS CARD */}
-              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
-                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-brand-accent" /> Status dos Documentos e Previsão
-                </h3>
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-stretch">
-                  
-                  {/* Documents List */}
-                  <div className="xl:col-span-7 space-y-2 max-h-[250px] overflow-y-auto pr-1.5 scrollbar-thin">
-                    {selectedEc.documents && selectedEc.documents.length > 0 ? (
-                      selectedEc.documents.map((doc) => {
-                        const isActivePreview = activePreviewDoc?.id === doc.id;
-                        return (
-                          <div 
-                            key={doc.id} 
-                            onClick={() => handlePreviewDoc(doc)}
-                            className={`p-2 rounded-sm border transition-all cursor-pointer space-y-1.5 ${
-                              isActivePreview 
-                                ? "bg-neutral-50 border-brand-accent shadow-sm"
-                                : "bg-white border-neutral-100 hover:bg-neutral-50/50"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2 min-w-0">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <FileText className={`h-4.5 w-4.5 shrink-0 ${isActivePreview ? 'text-brand-accent' : 'text-neutral-400'}`} />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[9.5px] font-black text-neutral-800 uppercase tracking-tight truncate" title={doc.name}>{doc.name}</p>
-                                  <p className="text-[7.5px] text-neutral-400 truncate" title={doc.fileName}>{doc.fileName} • versão 1</p>
-                                </div>
-                              </div>
-                              
-                              <a
-                                href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="h-6 w-6 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0"
-                                title="Baixar Documento"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Download className="h-3 w-3" />
-                              </a>
-                            </div>
-                            
-                            <div className="flex items-center justify-between pt-1">
-                              {getDocStatusBadge(doc.status)}
-                            </div>
-                            
-                            {doc.observations && (
-                              <div className="text-[10px] text-red-600 bg-red-50/50 p-2 border-l-2 border-red-500 rounded-r-xs mt-2" onClick={(e) => e.stopPropagation()}>
-                                <strong>Ajuste necessário:</strong> {doc.observations}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-xs text-neutral-400 italic text-center py-8">Nenhum documento anexado.</p>
-                    )}
+
+              {/* 4. LOCALIZAÇÃO DO ESTABELECIMENTO (Mini Mapa Google Maps) */}
+              <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-emerald-500 shadow-xl space-y-4">
+                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Map className="h-5 w-5 text-emerald-500" /> Localização no Mapa
                   </div>
-                  {/* Document Preview Pane */}
-                  <div className="xl:col-span-5 bg-neutral-50 border border-neutral-100 rounded-sm p-3 flex flex-col justify-between items-stretch h-[250px]">
-                    <div className="flex items-center justify-between border-b border-neutral-200 pb-1.5 mb-1.5 shrink-0">
-                      <span className="text-[8.5px] font-black text-neutral-500 uppercase tracking-widest">Pré-visualização</span>
-                      {activePreviewDoc && previewBlobUrl && (
-                        <button
-                          type="button"
-                          onClick={() => setIsModalOpen(true)}
-                          className="text-[7.5px] font-black text-brand-accent uppercase hover:underline cursor-pointer flex items-center gap-0.5 shrink-0"
-                        >
-                          <Eye className="h-2.5 w-2.5" /> Ampliar
-                        </button>
-                      )}
-                    </div>
-                    {isPreviewLoading ? (
-                      <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-8 shrink-0">
-                        <Loader2 className="h-5 w-5 text-brand-accent animate-spin" />
-                        <span className="text-[7.5px] font-black text-neutral-400 uppercase tracking-widest">Carregando arquivo...</span>
-                      </div>
-                    ) : previewBlobUrl ? (
-                      <div 
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex-1 w-full flex items-center justify-center overflow-hidden bg-white border border-neutral-200 rounded-sm cursor-pointer hover:border-brand-accent hover:shadow-md transition-all relative group"
-                        title="Clique para ampliar visualização"
-                      >
-                        {/* Hover Overlay */}
-                        <div className="absolute inset-0 bg-[#ff7711]/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
-                          <span className="bg-neutral-900/80 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-sm shadow-md flex items-center gap-1">
-                            <Eye className="h-3 w-3" /> Clique para Ampliar
-                          </span>
-                        </div>
-                        {activePreviewDoc?.mimeType.startsWith("image/") ? (
-                          <img 
-                            src={previewBlobUrl} 
-                            alt={activePreviewDoc.name} 
-                            className="max-w-full max-h-[180px] object-contain p-1.5" 
-                          />
-                        ) : activePreviewDoc?.mimeType === "application/pdf" || activePreviewDoc?.mimeType === "text/html" ? (
-                          <iframe 
-                            src={previewBlobUrl} 
-                            title="DocPreview" 
-                            className="w-full h-[180px] border-none pointer-events-none" 
-                          />
-                        ) : (
-                          <div className="text-center p-4 space-y-1.5">
-                            <FileText className="h-7 w-7 text-neutral-400 mx-auto" />
-                            <p className="text-[9px] text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
-                            <a 
-                              href={previewBlobUrl} 
-                              download={activePreviewDoc?.fileName}
-                              className="inline-block text-[8px] font-black text-brand-accent uppercase hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              Baixar arquivo
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-neutral-300 gap-2 border border-dashed border-neutral-200 rounded-sm bg-white">
-                        <FileSearch className="h-10 w-10 text-neutral-200" />
-                        <p className="text-[9.5px] font-black uppercase text-neutral-400 tracking-wider">
-                          Selecione um documento ao lado para pré-visualizar
-                        </p>
-                      </div>
-                    )}
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      `${selectedEc.rua}, ${selectedEc.numero} - ${selectedEc.bairro}, ${selectedEc.cidade} - ${selectedEc.state}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-black text-brand-accent hover:underline flex items-center gap-1 uppercase tracking-wider"
+                  >
+                    Abrir no Maps <ExternalLink className="h-3 w-3" />
+                  </a>
+                </h3>
+                
+                <div className="relative rounded-sm overflow-hidden border border-neutral-200 h-56 w-full bg-neutral-100 shadow-inner group">
+                  <iframe
+                    title="Localização do Estabelecimento"
+                    width="100%"
+                    height="100%"
+                    className="border-0 grayscale contrast-125 opacity-90 transition-all duration-300 group-hover:grayscale-0 group-hover:opacity-100"
+                    loading="lazy"
+                    allowFullScreen
+                    src={`https://maps.google.com/maps?q=${encodeURIComponent(
+                      `${selectedEc.rua}, ${selectedEc.numero} - ${selectedEc.bairro}, ${selectedEc.cidade} - ${selectedEc.state}`
+                    )}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                  />
+                </div>
+                
+                <div className="text-neutral-500 text-[10px] font-medium leading-relaxed bg-neutral-50 p-2.5 rounded-sm border border-neutral-100 flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-neutral-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-neutral-700 block uppercase tracking-wider text-[8px]">Endereço Confirmado:</span>
+                    {selectedEc.rua}, {selectedEc.numero} - {selectedEc.bairro}, {selectedEc.cidade}/{selectedEc.state}
                   </div>
                 </div>
               </Card>
             </div>
           </div>
+
+          {/* 2. COMPLIANCE OBSERVATIONS */}
+          {selectedEc.observations && (
+            <Card className="p-6 bg-red-50 border border-red-100 rounded-sm shadow-md space-y-3">
+              <h4 className="text-xs font-black text-red-700 uppercase tracking-widest flex items-center gap-1.5">
+                <AlertCircle className="h-4 w-4" /> Observações do Compliance
+              </h4>
+              <p className="text-xs text-red-900 leading-relaxed italic">
+                "{selectedEc.observations}"
+              </p>
+              <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
+                Por favor, verifique abaixo os documentos com pendências e envie os ajustes necessários.
+              </p>
+            </Card>
+          )}
+
+          {/* ── Full-width: Validação de Documentos ── */}
+          <Card className="mt-8 p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6 pb-20">
+            <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-4 flex items-center gap-2">
+              <FileSearch className="h-5 w-5 text-brand-accent" /> Status dos Documentos e Previsão
+            </h3>
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch">
+              {/* Documents Cards List */}
+              <div className="xl:col-span-5 space-y-4 max-h-[520px] overflow-y-auto pr-2 scrollbar-thin">
+                {[
+                  "Contrato Assinado",
+                  "Contrato / Estatuto Social",
+                  "Cartão CNPJ (RCFB)",
+                  "RG/CNH (Frente)",
+                  "RG/CNH (Verso)",
+                  "Comprovante de endereço da empresa",
+                  "Foto da Fachada"
+                ].map((docName) => {
+                  const doc = selectedEc.documents?.find(d => d.name === docName);
+                  const isActivePreview = doc ? activePreviewDoc?.id === doc.id : false;
+                  
+                  if (doc) {
+                    return (
+                      <div
+                        key={doc.id}
+                        onClick={() => handlePreviewDoc(doc)}
+                        className={`p-4 rounded-sm border-2 transition-all cursor-pointer space-y-3 ${
+                          isActivePreview
+                            ? "bg-neutral-50 border-brand-accent shadow-md"
+                            : "bg-white border-neutral-100 hover:border-neutral-200 shadow-sm hover:shadow-md"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className={`p-2 rounded-sm border shrink-0 ${isActivePreview ? 'bg-brand-accent/10 border-brand-accent/30 text-brand-accent' : 'bg-neutral-50 border-neutral-200 text-neutral-400'}`}>
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-black text-neutral-800 uppercase tracking-tight truncate" title={doc.name}>{doc.name}</p>
+                              <p className="text-[9.5px] text-neutral-400 truncate mt-0.5" title={doc.fileName}>{doc.fileName} • versão 1</p>
+                            </div>
+                          </div>
+                          <a
+                            href={`${api.defaults.baseURL}/api/establishments/documents/${doc.id}/download`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="h-8 w-8 bg-white border border-neutral-200 rounded-sm hover:bg-neutral-50 flex items-center justify-center text-neutral-500 shadow-sm shrink-0 transition-all hover:border-neutral-300"
+                            title="Baixar Documento"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+                          {getDocStatusBadge(doc.status)}
+                          
+                          {selectedEc.status !== "approved" && (
+                            <div onClick={(e) => e.stopPropagation()} className="relative">
+                              <input
+                                type="file"
+                                id={`upload-${doc.id}`}
+                                className="hidden"
+                                accept="image/*,application/pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadReplacement(doc.name, file);
+                                }}
+                              />
+                              <label
+                                htmlFor={`upload-${doc.id}`}
+                                className="flex items-center gap-1.5 text-[9.5px] font-black text-brand-accent uppercase bg-orange-50 border border-orange-200 hover:bg-brand-accent hover:text-white px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-all shrink-0"
+                              >
+                                <Upload className="h-3.5 w-3.5" /> Substituir
+                              </label>
+                            </div>
+                          )}
+                        </div>
+
+                        {doc.observations && (
+                          <div className="text-xs text-red-600 bg-red-50/50 p-3 border-l-3 border-red-500 rounded-r-xs mt-2" onClick={(e) => e.stopPropagation()}>
+                            <strong>Ajuste necessário:</strong> {doc.observations}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    // Document is missing (not uploaded yet)
+                    return (
+                      <div
+                        key={docName}
+                        className="p-4 rounded-sm border-2 border-dashed border-neutral-200 bg-neutral-50/30 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="p-2 rounded-sm border shrink-0 bg-neutral-100 border-neutral-200 text-neutral-300">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-black text-neutral-400 uppercase tracking-tight truncate" title={docName}>{docName}</p>
+                              <p className="text-[9.5px] text-neutral-300 truncate mt-0.5">Pendente de envio</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+                          {getDocStatusBadge("not_sent")}
+                          
+                          {selectedEc.status !== "approved" && (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                id={`upload-missing-${docName.replace(/\s+/g, '-')}`}
+                                className="hidden"
+                                accept="image/*,application/pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadReplacement(docName, file);
+                                }}
+                              />
+                              <label
+                                htmlFor={`upload-missing-${docName.replace(/\s+/g, '-')}`}
+                                className="flex items-center gap-1.5 text-[9.5px] font-black text-brand-accent uppercase bg-white border border-neutral-200 hover:border-brand-accent px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-all shrink-0"
+                              >
+                                <Upload className="h-3.5 w-3.5" /> Enviar
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                })}
+              </div>
+
+              {/* Document Preview Pane */}
+              <div className="xl:col-span-7 bg-neutral-50 border border-neutral-100 rounded-sm p-4 flex flex-col items-stretch h-[520px]">
+                <div className="flex items-center justify-between border-b border-neutral-200 pb-2 mb-3 shrink-0">
+                  <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Pré-visualização</span>
+                  {activePreviewDoc && previewBlobUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(true)}
+                      className="text-[8px] font-black text-brand-accent uppercase hover:underline cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <Eye className="h-3 w-3" /> Ampliar
+                    </button>
+                  )}
+                </div>
+                {isPreviewLoading ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="h-6 w-6 text-brand-accent animate-spin" />
+                    <span className="text-[8px] font-black text-neutral-400 uppercase tracking-widest">Carregando arquivo...</span>
+                  </div>
+                ) : previewBlobUrl ? (
+                  <div
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex-1 w-full flex items-center justify-center overflow-hidden bg-white border border-neutral-200 rounded-sm cursor-pointer hover:border-brand-accent hover:shadow-md transition-all relative group"
+                    title="Clique para ampliar visualização"
+                  >
+                    <div className="absolute inset-0 bg-[#ff7711]/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none z-10">
+                      <span className="bg-neutral-900/80 text-white text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-sm shadow-md flex items-center gap-1">
+                        <Eye className="h-3 w-3" /> Clique para Ampliar
+                      </span>
+                    </div>
+                    {activePreviewDoc?.mimeType.startsWith("image/") ? (
+                      <img src={previewBlobUrl} alt={activePreviewDoc.name} className="max-w-full max-h-full object-contain p-2" />
+                    ) : activePreviewDoc?.mimeType === "application/pdf" || activePreviewDoc?.mimeType === "text/html" ? (
+                      <iframe src={previewBlobUrl} title="DocPreview" className="w-full h-full border-none pointer-events-none" />
+                    ) : (
+                      <div className="text-center p-4 space-y-2">
+                        <FileText className="h-8 w-8 text-neutral-400 mx-auto" />
+                        <p className="text-[9px] text-neutral-500 font-bold uppercase">Previsão Indisponível</p>
+                        <a href={previewBlobUrl} download={activePreviewDoc?.fileName} className="inline-block text-[8px] font-black text-brand-accent uppercase hover:underline" onClick={(e) => e.stopPropagation()}>Baixar arquivo</a>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 gap-3 border border-dashed border-neutral-200 rounded-sm bg-white">
+                    <FileSearch className="h-14 w-14 text-neutral-200" />
+                    <p className="text-[10px] font-black uppercase text-neutral-400 tracking-wider">Selecione um documento ao lado para pré-visualizar</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
         </div>
       ) : (
         // E.C. Listing Screen for Agent
@@ -901,23 +1067,31 @@ function InfoItem({
   label, 
   value, 
   icon: Icon,
-  className = ""
+  className = "",
+  size = "default"
 }: { 
   label: string; 
   value: React.ReactNode; 
   icon?: any;
   className?: string;
+  size?: "default" | "lg";
 }) {
+  const labelSize = size === "lg" ? "text-[10px]" : "text-[9px]";
+  const valueSize = size === "lg" ? "text-sm" : "text-xs";
+  const padding = size === "lg" ? "p-3.5 gap-3" : "p-2 gap-2";
+  const iconPadding = size === "lg" ? "p-1.5" : "p-1";
+  const iconSize = size === "lg" ? "h-4 w-4" : "h-3.5 w-3.5";
+
   return (
-    <div className={`flex items-start gap-2 p-2 rounded-sm bg-neutral-50 border border-neutral-100/50 hover:bg-neutral-100/30 transition-all ${className}`}>
+    <div className={`flex items-start rounded-sm bg-neutral-50 border border-neutral-100/50 hover:bg-neutral-100/30 transition-all ${padding} ${className}`}>
       {Icon && (
-        <div className="p-1 bg-white rounded-xs border border-neutral-200 text-neutral-500 shrink-0 shadow-sm">
-          <Icon className="h-3.5 w-3.5" />
+        <div className={`bg-white rounded-xs border border-neutral-200 text-neutral-500 shrink-0 shadow-sm ${iconPadding}`}>
+          <Icon className={iconSize} />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-        <div className="font-bold text-neutral-800 text-xs truncate leading-tight" title={typeof value === 'string' ? value : undefined}>{value}</div>
+        <p className={`font-black text-neutral-400 uppercase tracking-widest leading-none mb-1.5 ${labelSize}`}>{label}</p>
+        <div className={`font-bold text-neutral-800 truncate leading-tight ${valueSize}`} title={typeof value === 'string' ? value : undefined}>{value}</div>
       </div>
     </div>
   );
