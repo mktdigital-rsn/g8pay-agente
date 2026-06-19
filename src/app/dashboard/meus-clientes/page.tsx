@@ -357,13 +357,44 @@ export default function MeusClientesPage() {
                   <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
                 </h3>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 content-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
                   <InfoItem size="lg" label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
                   <InfoItem size="lg" label="Complemento" value={selectedEc.complemento || "---"} icon={MapPin} />
                   <InfoItem size="lg" label="Bairro" value={selectedEc.bairro} icon={MapPin} />
                   <InfoItem size="lg" label="Cidade" value={selectedEc.cidade} icon={Map} />
                   <InfoItem size="lg" label="Estado / UF" value={selectedEc.state} icon={Map} />
                   <InfoItem size="lg" label="CEP" value={selectedEc.cep} icon={Hash} />
+                </div>
+
+                {/* Contatos do Estabelecimento */}
+                <div className="border-t border-neutral-100 pt-6 mt-4 space-y-6">
+                  <h4 className="text-xs font-black text-[#0c0a09] uppercase tracking-widest flex items-center gap-2">
+                    <User className="h-4.5 w-4.5 text-amber-500" /> Contatos do Estabelecimento
+                  </h4>
+                  {contacts.length > 0 ? (
+                    <div className="space-y-6">
+                      {contacts.map((c: any, idx: number) => (
+                        <div key={idx} className="space-y-3">
+                          <div className="flex items-center justify-between pb-1 border-b border-neutral-100">
+                            <span className="text-xs font-black text-[#0c0a09] uppercase tracking-wider">{c.nome || "Sem Nome"}</span>
+                            {c.tipoResponsavel && (
+                              <Badge className="bg-amber-50 text-amber-700 border border-amber-200 rounded-xs text-[8px] font-black uppercase tracking-wider px-2 py-0.5">
+                                {c.tipoResponsavel}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {c.cpf && <InfoItem label="CPF" value={c.cpf} icon={FileText} />}
+                            {c.telefone && <InfoItem label="Telefone" value={c.telefone} icon={Phone} />}
+                            {c.email && <InfoItem label="E-mail" value={c.email} icon={Globe} className="sm:col-span-2" />}
+                            {c.funcao && <InfoItem label="Cargo" value={c.funcao} icon={Briefcase} />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-neutral-400 italic font-semibold">Nenhum contato cadastrado.</p>
+                  )}
                 </div>
               </Card>
             </div>
@@ -501,7 +532,7 @@ export default function MeusClientesPage() {
                   </a>
                 </h3>
                 
-                <div className="relative rounded-sm overflow-hidden border border-neutral-200 h-56 w-full bg-neutral-100 shadow-inner group">
+                <div className="relative rounded-sm overflow-hidden border border-neutral-200 h-[26rem] w-full bg-neutral-100 shadow-inner group">
                   <iframe
                     title="Localização do Estabelecimento"
                     width="100%"

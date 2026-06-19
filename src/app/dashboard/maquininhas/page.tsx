@@ -1254,7 +1254,7 @@ export default function MaquininhasPage() {
                 <span className="text-sm font-black text-[#0c0a09] uppercase tracking-widest">Próximos passos</span>
               </div>
               {[
-                "Nossa equipe analisará seu cadastro em até 48h.",
+                "Nossa equipe analisará seu cadastro em até 72h.",
                 "Você receberá um e-mail com o status da aprovação.",
                 "Após aprovação, a maquininha será enviada ao endereço informado.",
                 "Prazo de entrega: 5 a 10 dias úteis.",
