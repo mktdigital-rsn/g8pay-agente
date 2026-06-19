@@ -372,9 +372,9 @@ export default function MeusClientesPage() {
                     <User className="h-4.5 w-4.5 text-amber-500" /> Contatos do Estabelecimento
                   </h4>
                   {contacts.length > 0 ? (
-                    <div className="space-y-6">
+                    <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-neutral-200 scrollbar-track-transparent">
                       {contacts.map((c: any, idx: number) => (
-                        <div key={idx} className="space-y-3">
+                        <div key={idx} className="min-w-[85%] sm:min-w-[400px] max-w-full snap-start space-y-3 shrink-0">
                           <div className="flex items-center justify-between pb-1 border-b border-neutral-100">
                             <span className="text-xs font-black text-[#0c0a09] uppercase tracking-wider">{c.nome || "Sem Nome"}</span>
                             {c.tipoResponsavel && (
