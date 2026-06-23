@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Search,
   Filter,
@@ -33,7 +33,9 @@ import {
   Briefcase,
   Cpu,
   Store,
-  Upload
+  Upload,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -90,11 +92,55 @@ export default function MeusClientesPage() {
   const [loading, setLoading] = useState(true);
   const [selectedEc, setSelectedEc] = useState<EstablishmentDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  
+
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "kanban">("kanban");
+
+  const kanbanContainerRef = useRef<HTMLDivElement>(null);
+  const [showLeftArrow, setShowLeftArrow] = useState(false);
+  const [showRightArrow, setShowRightArrow] = useState(false);
+
+  const checkKanbanScroll = () => {
+    if (kanbanContainerRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = kanbanContainerRef.current;
+      setShowLeftArrow(scrollLeft > 10);
+      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
+    }
+  };
+
+  useEffect(() => {
+    const container = kanbanContainerRef.current;
+    if (container && viewMode === "kanban" && !loading) {
+      // Small timeout to allow render completion
+      const timer = setTimeout(checkKanbanScroll, 100);
+      
+      container.addEventListener("scroll", checkKanbanScroll);
+      window.addEventListener("resize", checkKanbanScroll);
+
+      const observer = new MutationObserver(checkKanbanScroll);
+      observer.observe(container, { childList: true, subtree: true });
+
+      return () => {
+        clearTimeout(timer);
+        container.removeEventListener("scroll", checkKanbanScroll);
+        window.removeEventListener("resize", checkKanbanScroll);
+        observer.disconnect();
+      };
+    }
+  }, [viewMode, loading, establishments]);
+
+  const scrollKanban = (direction: "left" | "right") => {
+    if (kanbanContainerRef.current) {
+      const { clientWidth } = kanbanContainerRef.current;
+      const scrollAmount = clientWidth * 0.75;
+      kanbanContainerRef.current.scrollBy({
+        left: direction === "left" ? -scrollAmount : scrollAmount,
+        behavior: "smooth"
+      });
+    }
+  };
   // Document Preview States
   const [activePreviewDoc, setActivePreviewDoc] = useState<EstablishmentDocument | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
@@ -850,39 +896,62 @@ export default function MeusClientesPage() {
             </div>
           ) : establishments.length > 0 ? (
             viewMode === "kanban" ? (
-              <div className="flex flex-row overflow-x-auto gap-6 items-start pb-20 w-full scrollbar-thin">
-                <AgentKanbanColumn
-                  title="Pendentes"
-                  count={establishments.filter(e => e.status === "pending").length}
-                  colorClass="border-t-amber-500 bg-amber-500/5"
-                  accentColor="text-amber-600 bg-amber-50"
-                  items={establishments.filter(e => e.status === "pending")}
-                  onSelect={handleSelectEc}
-                />
-                <AgentKanbanColumn
-                  title="Em Análise Nível 2"
-                  count={establishments.filter(e => e.status === "pending_level_2").length}
-                  colorClass="border-t-blue-500 bg-blue-500/5"
-                  accentColor="text-blue-600 bg-blue-50"
-                  items={establishments.filter(e => e.status === "pending_level_2")}
-                  onSelect={handleSelectEc}
-                />
-                <AgentKanbanColumn
-                  title="Aprovados"
-                  count={establishments.filter(e => e.status === "approved").length}
-                  colorClass="border-t-emerald-500 bg-emerald-500/5"
-                  accentColor="text-emerald-600 bg-emerald-50"
-                  items={establishments.filter(e => e.status === "approved")}
-                  onSelect={handleSelectEc}
-                />
-                <AgentKanbanColumn
-                  title="Com Pendências"
-                  count={establishments.filter(e => e.status === "rejected").length}
-                  colorClass="border-t-red-500 bg-red-500/5"
-                  accentColor="text-red-600 bg-red-50"
-                  items={establishments.filter(e => e.status === "rejected")}
-                  onSelect={handleSelectEc}
-                />
+              <div className="relative w-full group/kanban">
+                {showLeftArrow && (
+                  <button
+                    type="button"
+                    onClick={() => scrollKanban("left")}
+                    className="absolute -left-4 top-[35%] -translate-y-1/2 z-20 bg-white/95 hover:bg-white text-[#0c0a09] hover:text-brand-accent rounded-full p-3.5 shadow-2xl border border-neutral-200/80 hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer flex items-center justify-center"
+                  >
+                    <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
+                  </button>
+                )}
+                {showRightArrow && (
+                  <button
+                    type="button"
+                    onClick={() => scrollKanban("right")}
+                    className="absolute -right-4 top-[35%] -translate-y-1/2 z-20 bg-white/95 hover:bg-white text-[#0c0a09] hover:text-brand-accent rounded-full p-3.5 shadow-2xl border border-neutral-200/80 hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer flex items-center justify-center"
+                  >
+                    <ChevronRight className="h-6 w-6 stroke-[2.5]" />
+                  </button>
+                )}
+                <div 
+                  ref={kanbanContainerRef}
+                  className="flex flex-row overflow-x-auto gap-6 items-start pb-6 w-full scrollbar-thin"
+                >
+                  <AgentKanbanColumn
+                    title="Pendentes"
+                    count={establishments.filter(e => e.status === "pending").length}
+                    colorClass="border-t-amber-500 bg-amber-500/5"
+                    accentColor="text-amber-600 bg-amber-50"
+                    items={establishments.filter(e => e.status === "pending")}
+                    onSelect={handleSelectEc}
+                  />
+                  <AgentKanbanColumn
+                    title="Em Análise Nível 2"
+                    count={establishments.filter(e => e.status === "pending_level_2").length}
+                    colorClass="border-t-blue-500 bg-blue-500/5"
+                    accentColor="text-blue-600 bg-blue-50"
+                    items={establishments.filter(e => e.status === "pending_level_2")}
+                    onSelect={handleSelectEc}
+                  />
+                  <AgentKanbanColumn
+                    title="Aprovados"
+                    count={establishments.filter(e => e.status === "approved").length}
+                    colorClass="border-t-emerald-500 bg-emerald-500/5"
+                    accentColor="text-emerald-600 bg-emerald-50"
+                    items={establishments.filter(e => e.status === "approved")}
+                    onSelect={handleSelectEc}
+                  />
+                  <AgentKanbanColumn
+                    title="Com Pendências"
+                    count={establishments.filter(e => e.status === "rejected").length}
+                    colorClass="border-t-red-500 bg-red-500/5"
+                    accentColor="text-red-600 bg-red-50"
+                    items={establishments.filter(e => e.status === "rejected")}
+                    onSelect={handleSelectEc}
+                  />
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">

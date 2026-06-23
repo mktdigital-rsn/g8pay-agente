@@ -235,6 +235,31 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: var(--brand-scrollbar-hover, rgba(255, 119, 17, 0.8));
   }
+  .scrollbar-thin::-webkit-scrollbar {
+    -webkit-appearance: none;
+    width: 8px;
+    height: 12px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: var(--border, rgba(0, 0, 0, 0.08));
+    border-radius: 10px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    -webkit-appearance: none;
+    background: var(--brand-accent, #ff7711);
+    border-radius: 10px;
+    border: 3px solid var(--background, #f8f9fa);
+    background-clip: padding-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-accent-hover, #ee6600);
+    border: 3px solid var(--background, #f8f9fa);
+    background-clip: padding-box;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--brand-accent, #ff7711) var(--border, rgba(0, 0, 0, 0.08));
+  }
 }
 
 /* Galapagos Capital interactive elements color overrides - no black buttons allowed */
