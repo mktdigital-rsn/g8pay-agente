@@ -383,7 +383,48 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
           </div>
         </div>
 
-        <div className="p-8 md:p-16 flex flex-col justify-center relative bg-[#0c0a09]">
+   
+          <div className="p-8 md:p-16 flex flex-col justify-center relative bg-[#0c0a09]">
+
+  {/* Logo apenas no mobile */}
+  <div className="md:hidden flex justify-center mb-10">
+    {currentBrand.id === "g8" ? (
+      <Image
+        src={currentBrand.logoOfficial}
+        alt={`${currentBrand.name} Logo`}
+        width={150}
+        height={55}
+        className="object-contain"
+      />
+    ) : (
+      <div className="flex items-center gap-3">
+        <img
+          src={currentBrand.logoWhite}
+          alt={`${currentBrand.name} Logo`}
+          className={`${
+            currentBrand.id === "galapagos"
+              ? "h-8"
+              : currentBrand.id === "fiscomoney" ||
+                currentBrand.id === "advogado10x"
+              ? "h-12"
+              : "h-14"
+          } w-auto object-contain`}
+        />
+
+        {currentBrand.id === "galapagos" && (
+          <div className="flex flex-col justify-center text-left">
+            <span className="text-[15px] font-semibold tracking-wide leading-none text-white">
+              {currentBrand.name.split(" ")[0]}
+            </span>
+            <span className="text-[8px] font-black tracking-[0.38em] uppercase text-white mt-1 leading-none">
+              {(currentBrand.name.split(" ")[1] || "Capital").toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+
           <AnimatePresence mode="wait">
             {step === "identifier" && (
               <motion.div
