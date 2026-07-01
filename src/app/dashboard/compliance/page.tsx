@@ -1,11 +1,12 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   Search,
   Filter,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   FileText,
   Eye,
@@ -97,12 +98,15 @@ export default function CompliancePage() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEc, setSelectedEc] = useState<EstablishmentDetails | null>(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterAgent, setFilterAgent] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "kanban">("kanban");
+  const [exportingType, setExportingType] = useState<"pdf" | "csv" | "xls" | null>(null);
 
   const kanbanContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -147,6 +151,237 @@ export default function CompliancePage() {
       });
     }
   };
+
+  const normalizeText = (value?: string | null) =>
+    (value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
+  const parseDateAtStartOfDay = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, (month || 1) - 1, day || 1, 0, 0, 0, 0);
+  };
+
+  const parseDateAtEndOfDay = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, (month || 1) - 1, day || 1, 23, 59, 59, 999);
+  };
+
+  const filteredEstablishments = establishments.filter((ec) => {
+    const statusMatches = !filterStatus || ec.status === filterStatus;
+    const search = normalizeText(searchQuery);
+    const agentSearch = normalizeText(filterAgent);
+    const createdAt = new Date(ec.createdAt);
+    const dateFromMatches = !filterDateFrom || createdAt >= parseDateAtStartOfDay(filterDateFrom);
+    const dateToMatches = !filterDateTo || createdAt <= parseDateAtEndOfDay(filterDateTo);
+    const searchMatches =
+      !search ||
+      [
+        ec.nomeFantasia,
+        ec.razaoSocial,
+        ec.cnpjCpf,
+        ec.agentName,
+        ec.agentCpf,
+        ec.agentId,
+        ec.cidade,
+        ec.state,
+      ].some((field) => normalizeText(field).includes(search));
+    const agentMatches =
+      !agentSearch ||
+      [ec.agentName, ec.agentCpf, ec.agentId].some((field) => normalizeText(field).includes(agentSearch));
+
+    return statusMatches && searchMatches && agentMatches && dateFromMatches && dateToMatches;
+  });
+
+  const filterSummary = [
+    filterStatus ? `status ${filterStatus}` : null,
+    filterAgent ? `agente ${filterAgent}` : null,
+    filterDateFrom ? `de ${filterDateFrom}` : null,
+    filterDateTo ? `até ${filterDateTo}` : null,
+    searchQuery ? `busca "${searchQuery}"` : null,
+  ].filter(Boolean) as string[];
+
+  function formatStatusLabel(status: Establishment["status"]) {
+    switch (status) {
+      case "approved":
+        return "Aprovado";
+      case "rejected":
+        return "Reprovado";
+      case "pending_level_2":
+        return "Nível 2";
+      default:
+        return "Pendente";
+    }
+  }
+
+  const exportRows = filteredEstablishments.map((ec) => ({
+    nomeFantasia: ec.nomeFantasia,
+    razaoSocial: ec.razaoSocial || "---",
+    cnpjCpf: ec.cnpjCpf,
+    agente: ec.agentName || "Sem vínculo",
+    agenteCpf: ec.agentCpf || "---",
+    status: formatStatusLabel(ec.status),
+    cidade: `${ec.cidade}/${ec.state}`,
+    criadoEm: new Date(ec.createdAt).toLocaleDateString("pt-BR"),
+    atualizadoEm: new Date(ec.updatedAt).toLocaleDateString("pt-BR"),
+  }));
+
+  const downloadFile = (content: BlobPart, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const escapeCsvValue = (value: string) => `"${value.replace(/"/g, '""')}"`;
+
+  const loadLogoDataUrl = async () => {
+    const response = await fetch("/logo_g8_white.png");
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const addPageFooter = (doc: jsPDF, pageNumber: number, totalPages: number) => {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.6);
+    doc.line(40, pageHeight - 28, pageWidth - 40, pageHeight - 28);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
+    doc.text("Relatório de Compliance de Estabelecimentos Comerciais", 40, pageHeight - 16);
+    doc.text(`Página ${pageNumber} de ${totalPages}`, pageWidth - 40, pageHeight - 16, { align: "right" });
+  };
+
+  const handleExport = async (type: "pdf" | "csv" | "xls") => {
+    if (!filteredEstablishments.length) {
+      toast.error("Não há estabelecimentos para exportar com os filtros atuais.");
+      return;
+    }
+
+    setExportingType(type);
+    const toastId = toast.loading(`Preparando relatório ${type.toUpperCase()}...`);
+
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const filenameBase = `relatorio_compliance_ec_${timestamp}`;
+
+      if (type === "pdf") {
+        const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+        const logoDataUrl = await loadLogoDataUrl();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        if (logoDataUrl) {
+          doc.addImage(logoDataUrl, "PNG", 40, 24, 96, 38);
+        }
+
+        doc.setTextColor(17, 24, 39);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(20);
+        doc.text("Relatório de Compliance de E.C.", 150, 42);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text(`Gerado em ${new Date().toLocaleString("pt-BR")}`, 150, 58);
+        doc.text(`Registros: ${filteredEstablishments.length}`, 150, 73);
+        doc.text(`Período: ${filterDateFrom || "início"} até ${filterDateTo || "hoje"}`, 150, 88);
+
+        doc.setDrawColor(229, 231, 235);
+        doc.setLineWidth(0.6);
+        doc.line(40, 104, pageWidth - 40, 104);
+
+        autoTable(doc, {
+          startY: 116,
+          head: [[
+            "Estabelecimento",
+            "CNPJ/CPF",
+            "Agente",
+            "Status",
+            "Cidade/UF",
+            "Criado em",
+            "Atualizado em",
+          ]],
+          body: exportRows.map((row) => [
+            row.nomeFantasia,
+            row.cnpjCpf,
+            row.agente,
+            row.status,
+            row.cidade,
+            row.criadoEm,
+            row.atualizadoEm,
+          ]),
+          styles: { fontSize: 8, cellPadding: 4 },
+          headStyles: { fillColor: [17, 24, 39], textColor: [255, 255, 255] },
+          alternateRowStyles: { fillColor: [249, 250, 251] },
+          margin: { left: 40, right: 40 },
+        });
+
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+          doc.setPage(pageNumber);
+          addPageFooter(doc, pageNumber, totalPages);
+        }
+
+        doc.save(`${filenameBase}.pdf`);
+      } else {
+        const headers = [
+          "Estabelecimento",
+          "Razão Social",
+          "CNPJ/CPF",
+          "Agente",
+          "CPF do Agente",
+          "Status",
+          "Cidade/UF",
+          "Criado em",
+          "Atualizado em",
+        ];
+        const rows = exportRows.map((row) =>
+          [
+            row.nomeFantasia,
+            row.razaoSocial,
+            row.cnpjCpf,
+            row.agente,
+            row.agenteCpf,
+            row.status,
+            row.cidade,
+            row.criadoEm,
+            row.atualizadoEm,
+          ]
+            .map((value) => escapeCsvValue(String(value)))
+            .join(";")
+        );
+        const csvContent = [headers.map(escapeCsvValue).join(";"), ...rows].join("\n");
+        downloadFile(
+          `\uFEFF${csvContent}`,
+          `${filenameBase}.${type}`,
+          type === "csv" ? "text/csv;charset=utf-8;" : "application/vnd.ms-excel;charset=utf-8;"
+        );
+      }
+
+      toast.success("Relatório exportado com sucesso!", { id: toastId });
+    } catch (err) {
+      console.error("Error exporting compliance report:", err);
+      toast.error("Erro ao exportar relatório.", { id: toastId });
+    } finally {
+      setExportingType(null);
+    }
+  };
   
   // Compliance Review States for Selected E.C.
   const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions" | "pending", observations: string }>>({}); 
@@ -158,19 +393,30 @@ export default function CompliancePage() {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const fetchEstablishments = async () => {
+  const fetchEstablishments = async (overrides?: {
+    status?: string;
+    search?: string;
+    agent?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  }) => {
     setLoading(true);
     try {
-      let url = "/api/establishments";
-      const params = [];
-      if (filterStatus) params.push(`status=${filterStatus}`);
-      if (searchQuery) params.push(`search=${encodeURIComponent(searchQuery)}`);
-      
-      if (params.length > 0) {
-        url += `?${params.join("&")}`;
-      }
-      
-      const res = await api.get(url);
+      const params = new URLSearchParams();
+      const effectiveStatus = overrides?.status ?? filterStatus;
+      const effectiveSearch = overrides?.search ?? searchQuery;
+      const effectiveAgent = overrides?.agent ?? filterAgent;
+      const effectiveCreatedFrom = overrides?.createdFrom ?? filterDateFrom;
+      const effectiveCreatedTo = overrides?.createdTo ?? filterDateTo;
+
+      if (effectiveStatus) params.set("status", effectiveStatus);
+      if (effectiveSearch) params.set("search", effectiveSearch);
+      if (effectiveAgent) params.set("agent", effectiveAgent);
+      if (effectiveCreatedFrom) params.set("createdFrom", effectiveCreatedFrom);
+      if (effectiveCreatedTo) params.set("createdTo", effectiveCreatedTo);
+
+      const queryString = params.toString();
+      const res = await api.get(`/api/establishments${queryString ? `?${queryString}` : ""}`);
       if (res.data && res.data.success) {
         setEstablishments(res.data.data);
       }
@@ -183,14 +429,8 @@ export default function CompliancePage() {
   };
   useEffect(() => {
     fetchEstablishments();
-  }, [filterStatus]);
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchEstablishments();
-  };
+  }, []);
   const handleSelectEc = async (id: string) => {
-    setLoadingDetails(true);
-    
     // Revoke previous blob URL if exists
     if (previewBlobUrl) {
       URL.revokeObjectURL(previewBlobUrl);
@@ -218,8 +458,6 @@ export default function CompliancePage() {
     } catch (err: any) {
       console.error("Error loading E.C. details:", err);
       toast.error("Erro ao carregar detalhes do estabelecimento.");
-    } finally {
-      setLoadingDetails(false);
     }
   };
   const handleDocReviewChange = (docId: string, status: "approved" | "rejected" | "revisions") => {
@@ -335,11 +573,7 @@ export default function CompliancePage() {
   };
   const maskAgentName = (name?: string) => {
     if (!name) return "---";
-    const parts = name.split(" ");
-    if (parts.length < 2) return name;
-    const first = parts[0];
-    const last = parts[parts.length - 1];
-    return `${first} ** * ${last}`;
+    return name.trim();
   };
   const maskAgentCpf = (cpf?: string) => {
     if (!cpf) return "---";
@@ -374,7 +608,7 @@ export default function CompliancePage() {
               {getStatusBadge(selectedEc.status)}
             </div>
             <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1">
-              Agente: <span className="text-neutral-700 font-black">{maskAgentName(agentName)}</span> • CPF: <span className="text-neutral-700 font-black">{maskAgentCpf(agentCpf)}</span>
+              Responsável: <span className="text-neutral-700 font-black">{agentName || "Sem vínculo"}</span> • CPF: <span className="text-neutral-700 font-black">{maskAgentCpf(agentCpf)}</span>
             </p>
           </div>
         </div>
@@ -404,6 +638,8 @@ export default function CompliancePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InfoItem label="CNPJ/CPF" value={selectedEc.cnpjCpf} icon={FileText} className="sm:col-span-2" />
                   <InfoItem label="Nome Fantasia" value={selectedEc.nomeFantasia} icon={Store} className="sm:col-span-2" />
+                  <InfoItem label="Agente Responsável" value={agentName || "Sem vínculo"} icon={User} className="sm:col-span-2" />
+                  <InfoItem label="CPF do Agente" value={agentCpf ? maskAgentCpf(agentCpf) : "---"} icon={Hash} />
                   <InfoItem label="Tipo Estabelecimento" value={selectedEc.tipoEstabelecimento} icon={User} />
                   <InfoItem label="Tipo de Empresa" value={selectedEc.tipoEmpresa} icon={Building} />
                   <InfoItem label="Contato Principal" value={selectedEc.contatoPrincipal} icon={Phone} />
@@ -897,51 +1133,34 @@ export default function CompliancePage() {
           </p>
         </div>
         {/* Filters and search section */}
-        <Card className="p-5 bg-white border border-neutral-100 shadow-xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 rounded-sm">
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 h-12 rounded-sm flex-1 min-w-0">
-            <Search className="h-5 w-5 text-neutral-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por Nome Fantasia, CNPJ ou Agente..."
-              className="bg-transparent border-none text-[#0c0a09] placeholder-neutral-400 text-xs font-bold uppercase tracking-wider focus-visible:outline-none flex-1"
-            />
-            <Button type="submit" className="h-8 bg-brand-accent hover:bg-brand-accent-hover text-white rounded-sm text-[9px] font-black uppercase tracking-widest px-4 cursor-pointer shadow-lg shadow-orange-500/10">Buscar</Button>
-          </form>
-          <div className="flex gap-4 shrink-0 items-center">
-            {/* View Mode Toggle */}
-            <div className="flex border border-neutral-200 rounded-sm p-1 bg-neutral-50 shrink-0 h-12 items-center">
-              <button
-                type="button"
-                onClick={() => setViewMode("kanban")}
-                className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
-                  viewMode === "kanban"
-                    ? "bg-neutral-900 text-white shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-800"
-                }`}
-              >
-                CRM Kanban
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-neutral-900 text-white shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-800"
-                }`}
-              >
-                Grade
-              </button>
+        <Card className="p-5 bg-white border border-neutral-100 shadow-xl rounded-sm space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+            <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 h-12 rounded-sm xl:col-span-2">
+              <Search className="h-5 w-5 text-neutral-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar por Nome Fantasia, CNPJ, cidade ou agente..."
+                className="bg-transparent border-none text-[#0c0a09] placeholder-neutral-400 text-xs font-bold uppercase tracking-wider focus-visible:outline-none flex-1"
+              />
             </div>
-            {/* Status filters */}
+            <div className="flex items-center gap-3 bg-neutral-50 border border-neutral-200 px-4 h-12 rounded-sm xl:col-span-1">
+              <User className="h-5 w-5 text-neutral-400 shrink-0" />
+              <input
+                type="text"
+                value={filterAgent}
+                onChange={(e) => setFilterAgent(e.target.value)}
+                placeholder="Agente"
+                className="bg-transparent border-none text-[#0c0a09] placeholder-neutral-400 text-xs font-bold uppercase tracking-wider focus-visible:outline-none flex-1"
+              />
+            </div>
             <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-sm px-4 h-12">
               <Filter className="h-4 w-4 text-neutral-400 shrink-0" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-transparent border-none text-[#0c0a09] text-xs font-black uppercase tracking-wider focus-visible:outline-none cursor-pointer"
+                className="bg-transparent border-none text-[#0c0a09] text-xs font-black uppercase tracking-wider focus-visible:outline-none cursor-pointer flex-1"
               >
                 <option value="">Todos os Status</option>
                 <option value="pending">Pendentes</option>
@@ -950,10 +1169,121 @@ export default function CompliancePage() {
                 <option value="pending_level_2">Nível 2</option>
               </select>
             </div>
-            
-            <Button onClick={fetchEstablishments} className="h-12 bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 rounded-sm font-black text-xs uppercase tracking-widest px-6 shadow-sm cursor-pointer">
-              Atualizar
-            </Button>
+            <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-sm px-4 h-12">
+              <Calendar className="h-4 w-4 text-neutral-400 shrink-0" />
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="bg-transparent border-none text-[#0c0a09] text-xs font-black uppercase tracking-wider focus-visible:outline-none cursor-pointer flex-1"
+                title="Data inicial"
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 rounded-sm px-4 h-12">
+              <Calendar className="h-4 w-4 text-neutral-400 shrink-0" />
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="bg-transparent border-none text-[#0c0a09] text-xs font-black uppercase tracking-wider focus-visible:outline-none cursor-pointer flex-1"
+                title="Data final"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex border border-neutral-200 rounded-sm p-1 bg-neutral-50 shrink-0 h-12 items-center">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("kanban")}
+                  className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === "kanban"
+                      ? "bg-neutral-900 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-800"
+                  }`}
+                >
+                  CRM Kanban
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("grid")}
+                  className={`px-4 h-9 rounded-sm font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-neutral-900 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-800"
+                  }`}
+                >
+                  Grade
+                </button>
+              </div>
+              <div className="px-4 h-12 rounded-sm border border-neutral-200 bg-neutral-50 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-neutral-600">
+                <span className="text-brand-accent">{filteredEstablishments.length}</span>
+                <span>/</span>
+                <span>{establishments.length}</span>
+                <span className="text-neutral-400">registros</span>
+              </div>
+              {filterSummary.length > 0 && (
+                <div className="hidden xl:flex px-4 h-12 rounded-sm border border-amber-200 bg-amber-50/60 items-center text-[10px] font-black uppercase tracking-widest text-amber-700 max-w-[42rem] truncate">
+                  {filterSummary.join(" • ")}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => handleExport("pdf")}
+                disabled={!!exportingType}
+                className="h-12 bg-neutral-900 hover:bg-black text-white rounded-sm font-black text-[10px] uppercase tracking-widest px-4 cursor-pointer shadow-sm flex items-center gap-2"
+              >
+                {exportingType === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                PDF
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleExport("csv")}
+                disabled={!!exportingType}
+                className="h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm font-black text-[10px] uppercase tracking-widest px-4 cursor-pointer shadow-sm flex items-center gap-2"
+              >
+                {exportingType === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                CSV
+              </Button>
+              <Button
+                type="button"
+                onClick={() => handleExport("xls")}
+                disabled={!!exportingType}
+                className="h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-sm font-black text-[10px] uppercase tracking-widest px-4 cursor-pointer shadow-sm flex items-center gap-2"
+              >
+                {exportingType === "xls" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                XLS
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilterAgent("");
+                  setFilterStatus("");
+                  setFilterDateFrom("");
+                  setFilterDateTo("");
+                  fetchEstablishments({
+                    status: "",
+                    search: "",
+                    agent: "",
+                    createdFrom: "",
+                    createdTo: "",
+                  });
+                }}
+                className="h-12 bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 rounded-sm font-black text-[10px] uppercase tracking-widest px-4 shadow-sm cursor-pointer"
+              >
+                Limpar
+              </Button>
+              <Button
+                type="button"
+                onClick={fetchEstablishments}
+                className="h-12 bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 rounded-sm font-black text-[10px] uppercase tracking-widest px-6 shadow-sm cursor-pointer"
+              >
+                Atualizar
+              </Button>
+            </div>
           </div>
         </Card>
         {/* E.C. Listing table/cards */}
@@ -962,7 +1292,7 @@ export default function CompliancePage() {
             <Loader2 className="h-10 w-10 text-brand-accent animate-spin" />
             <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest">Carregando credenciamentos...</p>
           </div>
-        ) : establishments.length > 0 ? (
+        ) : filteredEstablishments.length > 0 ? (
           viewMode === "kanban" ? (
             <div className="relative w-full group/kanban">
               {showLeftArrow && (
@@ -989,41 +1319,41 @@ export default function CompliancePage() {
               >
                 <KanbanColumn
                   title="Pendentes"
-                  count={establishments.filter(e => e.status === "pending").length}
+                  count={filteredEstablishments.filter(e => e.status === "pending").length}
                   status="pending"
                   colorClass="border-t-amber-500 bg-amber-500/5"
                   accentColor="text-amber-600 bg-amber-50"
-                  items={establishments.filter(e => e.status === "pending")}
+                  items={filteredEstablishments.filter(e => e.status === "pending")}
                   onSelect={handleSelectEc}
                   maskAgentName={maskAgentName}
                 />
                 <KanbanColumn
                   title="Em Análise Nível 2"
-                  count={establishments.filter(e => e.status === "pending_level_2").length}
+                  count={filteredEstablishments.filter(e => e.status === "pending_level_2").length}
                   status="pending_level_2"
                   colorClass="border-t-blue-500 bg-blue-500/5"
                   accentColor="text-blue-600 bg-blue-50"
-                  items={establishments.filter(e => e.status === "pending_level_2")}
+                  items={filteredEstablishments.filter(e => e.status === "pending_level_2")}
                   onSelect={handleSelectEc}
                   maskAgentName={maskAgentName}
                 />
                 <KanbanColumn
                   title="Aprovados"
-                  count={establishments.filter(e => e.status === "approved").length}
+                  count={filteredEstablishments.filter(e => e.status === "approved").length}
                   status="approved"
                   colorClass="border-t-emerald-500 bg-emerald-500/5"
                   accentColor="text-emerald-600 bg-emerald-50"
-                  items={establishments.filter(e => e.status === "approved")}
+                  items={filteredEstablishments.filter(e => e.status === "approved")}
                   onSelect={handleSelectEc}
                   maskAgentName={maskAgentName}
                 />
                 <KanbanColumn
                   title="Reprovados"
-                  count={establishments.filter(e => e.status === "rejected").length}
+                  count={filteredEstablishments.filter(e => e.status === "rejected").length}
                   status="rejected"
                   colorClass="border-t-red-500 bg-red-500/5"
                   accentColor="text-red-600 bg-red-50"
-                  items={establishments.filter(e => e.status === "rejected")}
+                  items={filteredEstablishments.filter(e => e.status === "rejected")}
                   onSelect={handleSelectEc}
                   maskAgentName={maskAgentName}
                 />
@@ -1031,7 +1361,7 @@ export default function CompliancePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-              {establishments.map((ec) => (
+              {filteredEstablishments.map((ec) => (
                 <Card
                   key={ec.id}
                   onClick={() => handleSelectEc(ec.id)}
@@ -1062,7 +1392,7 @@ export default function CompliancePage() {
                       <div className="flex items-center gap-2.5 text-neutral-500">
                         <User className="h-4.5 w-4.5 text-neutral-400 shrink-0" />
                         <span className="font-semibold text-neutral-400 uppercase tracking-widest text-[9px]">
-                          Agente: <strong className="text-neutral-700">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong>
+                          Responsável: <strong className="text-neutral-700">{ec.agentName ? maskAgentName(ec.agentName) : "Sem vínculo"}</strong>
                         </span>
                       </div>
                     </div>
@@ -1179,7 +1509,7 @@ function KanbanColumn({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <User className="h-3 w-3 text-neutral-400 shrink-0" />
-                  <span className="truncate">Agente: <strong className="text-neutral-600">{ec.agentName ? maskAgentName(ec.agentName) : "Direto"}</strong></span>
+                  <span className="truncate">Responsável: <strong className="text-neutral-600">{ec.agentName ? maskAgentName(ec.agentName) : "Sem vínculo"}</strong></span>
                 </div>
               </div>
             </div>
