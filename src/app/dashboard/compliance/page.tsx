@@ -332,7 +332,7 @@ export default function CompliancePage() {
           margin: { left: 40, right: 40 },
         });
 
-        const totalPages = doc.internal.getNumberOfPages();
+        const totalPages = (doc as any).internal.getNumberOfPages();
         for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
           doc.setPage(pageNumber);
           addPageFooter(doc, pageNumber, totalPages);
@@ -1278,7 +1278,7 @@ export default function CompliancePage() {
               </Button>
               <Button
                 type="button"
-                onClick={fetchEstablishments}
+                onClick={() => fetchEstablishments()}
                 className="h-12 bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 rounded-sm font-black text-[10px] uppercase tracking-widest px-6 shadow-sm cursor-pointer"
               >
                 Atualizar

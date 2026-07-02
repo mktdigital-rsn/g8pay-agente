@@ -91,6 +91,8 @@ export default function MaquininhasPage() {
   // Document State
   const [attachedDocs, setAttachedDocs] = useState<string[]>([]);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [duplicateDocumentNotice, setDuplicateDocumentNotice] = useState<string | null>(null);
+  const [isCheckingDuplicateDocument, setIsCheckingDuplicateDocument] = useState(false);
 
   // Form fields
   const [formData, setFormData] = useState({
@@ -202,6 +204,11 @@ export default function MaquininhasPage() {
     const cleanCnpj = cnpj.replace(/\D/g, "");
     if (cleanCnpj.length === 14) {
       try {
+        const duplicateResult = await checkDuplicateDocument(cnpj);
+        if (duplicateResult.exists) {
+          return;
+        }
+
         const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
         const data = await res.json();
         if (data && !data.message) {
@@ -285,6 +292,78 @@ export default function MaquininhasPage() {
       currency: "BRL",
     }).format(value);
   };
+
+  const checkDuplicateDocument = async (documentValue: string) => {
+    const res = await api.get("/api/establishments/check-duplicate", {
+      params: { cnpjCpf: documentValue },
+    });
+
+    return {
+      exists: !!res.data?.exists,
+      data: res.data?.data || null,
+    };
+  };
+
+  const handleDocumentNumberChange = async (value: string) => {
+    const masked = maskCpfCnpj(value);
+    updateField("cnpjCpf", masked);
+
+    const cleanDoc = masked.replace(/\D/g, "");
+    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
+      setDuplicateDocumentNotice(null);
+      return;
+    }
+
+    setIsCheckingDuplicateDocument(true);
+    try {
+      const duplicateResult = await checkDuplicateDocument(masked);
+      if (duplicateResult.exists) {
+        const docLabel = cleanDoc.length === 14 ? "CNPJ" : "CPF";
+        setDuplicateDocumentNotice(`Este ${docLabel} já está em uso por outro E.C.`);
+        return;
+      }
+
+      setDuplicateDocumentNotice(null);
+      if (cleanDoc.length === 14) {
+        await handleCnpjLookup(masked);
+      }
+    } catch (err) {
+      console.error("Erro ao checar duplicidade do documento:", err);
+      setDuplicateDocumentNotice(null);
+    } finally {
+      setIsCheckingDuplicateDocument(false);
+    }
+  };
+
+  useEffect(() => {
+    const cleanDoc = formData.cnpjCpf.replace(/\D/g, "");
+
+    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
+      setDuplicateDocumentNotice(null);
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setIsCheckingDuplicateDocument(true);
+      try {
+        const duplicateResult = await checkDuplicateDocument(formData.cnpjCpf);
+
+        if (duplicateResult.exists) {
+          const docLabel = cleanDoc.length === 14 ? "CNPJ" : "CPF";
+          setDuplicateDocumentNotice(`Este ${docLabel} já está em uso por outro E.C.`);
+        } else {
+          setDuplicateDocumentNotice(null);
+        }
+      } catch (err) {
+        console.error("Erro ao checar duplicidade do documento:", err);
+        setDuplicateDocumentNotice(null);
+      } finally {
+        setIsCheckingDuplicateDocument(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [formData.cnpjCpf]);
 
   const handleCepChange = async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, "");
@@ -436,6 +515,11 @@ export default function MaquininhasPage() {
       return;
     }
 
+    if (duplicateDocumentNotice) {
+      toast.error(duplicateDocumentNotice);
+      return;
+    }
+
     // Validate dynamic lists
     const contactMissing = formData.contatos.some(c => !c.nome || !c.cpf || !c.telefone);
     if (contactMissing) {
@@ -457,6 +541,16 @@ export default function MaquininhasPage() {
   };
 
   const handleConfirm = async () => {
+    if (isCheckingDuplicateDocument) {
+      toast.error("Aguarde a verificação do CPF/CNPJ.");
+      return;
+    }
+
+    if (duplicateDocumentNotice) {
+      toast.error(duplicateDocumentNotice);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const agentId = localStorage.getItem("agentId") || "unknown-agent";
@@ -472,11 +566,19 @@ export default function MaquininhasPage() {
       } else {
         throw new Error(response.data?.error || "Erro ao salvar estabelecimento.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving E.C.:", err);
+
+      const error = err as {
+        response?: { status?: number; data?: { error?: string } };
+        message?: string;
+      };
       
-      const serverError = err.response?.data?.error || "";
-      const localError = err.message || "";
+      const serverError = error.response?.data?.error || "";
+      const localError = error.message || "";
+      if (error.response?.status === 409) {
+        setDuplicateDocumentNotice(serverError || "Este CNPJ/CPF já está cadastrado para outro estabelecimento comercial.");
+      }
       const fullErrorText = `${serverError} ${localError}`;
       
       let errMsg = "Ocorreu um erro ao processar o credenciamento do estabelecimento. Verifique os dados e tente novamente.";
@@ -502,7 +604,7 @@ export default function MaquininhasPage() {
   const handleReset = () => {
     setStep("form");
     setSelectedModel(modelos[1]);
-    setFormData({
+      setFormData({
       tipoEstabelecimento: "",
       cnpjCpf: "",
       razaoSocial: "",
@@ -533,6 +635,8 @@ export default function MaquininhasPage() {
       contasBancarias: [{ tipoConta: "Conta Corrente", banco: "", agencia: "", conta: "", digito: "" }],
       documents: {}
     });
+    setDuplicateDocumentNotice(null);
+    setIsCheckingDuplicateDocument(false);
   };
 
   return (
@@ -722,11 +826,11 @@ export default function MaquininhasPage() {
                     required
                     value={formData.cnpjCpf}
                     onChange={(v) => {
-                      const masked = maskCpfCnpj(v);
-                      updateField("cnpjCpf", masked);
-                      if (masked.length > 14) handleCnpjLookup(masked);
+                      void handleDocumentNumberChange(v);
                     }}
                     placeholder="XXX.XXX.XXX-XX"
+                    error={duplicateDocumentNotice}
+                    isChecking={isCheckingDuplicateDocument}
                   />
                   <FormField label="Razão Social" value={formData.razaoSocial} onChange={(v) => updateField("razaoSocial", v)} placeholder="Razão Social da Empresa" />
 
@@ -983,11 +1087,12 @@ export default function MaquininhasPage() {
               <div className="pt-10 flex flex-col items-center gap-6">
                 <Button
                   onClick={handleSubmitForm}
+                  disabled={isCheckingDuplicateDocument || !!duplicateDocumentNotice}
                   className={`w-full max-w-2xl h-20 text-white rounded-[2px] font-black text-lg uppercase tracking-[0.2em] transition-all active:scale-[0.98] ${
                     currentBrand.id !== "g8"
                       ? "bg-[var(--brand-accent)] hover:bg-[var(--brand-accent-hover)] shadow-2xl shadow-[var(--brand-accent-light)]"
                       : "bg-gradient-to-r from-[var(--brand-accent)] to-[#ea580c] hover:from-[#ea580c] hover:to-[var(--brand-accent)] shadow-2xl shadow-orange-500/20"
-                  }`}
+                  } ${isCheckingDuplicateDocument || duplicateDocumentNotice ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   Revisar Solicitação e Continuar <ArrowRight className="h-6 w-6 ml-4" />
                 </Button>
@@ -1209,9 +1314,9 @@ export default function MaquininhasPage() {
                 >
                   Voltar e Corrigir
                 </Button>
-                 <Button
+                <Button
                   onClick={handleConfirm}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCheckingDuplicateDocument || !!duplicateDocumentNotice}
                   className={`flex-[2] h-20 text-white rounded-[2px] font-black text-sm uppercase tracking-[0.2em] transition-all active:scale-[0.98] disabled:opacity-50 ${
                     currentBrand.id !== "g8"
                       ? "bg-[var(--brand-accent)] hover:bg-[var(--brand-accent-hover)] shadow-2xl shadow-[var(--brand-accent-light)]"
@@ -1294,6 +1399,8 @@ function FormField({
   placeholder,
   required,
   type = "text",
+  error,
+  isChecking,
 }: {
   label: string;
   value: string;
@@ -1301,7 +1408,10 @@ function FormField({
   placeholder?: string;
   required?: boolean;
   type?: string;
+  error?: string | null;
+  isChecking?: boolean;
 }) {
+  const hasError = !!error;
   return (
     <div className="space-y-2.5">
       <label className="text-[11px] font-black text-[#0c0a09] uppercase tracking-widest block flex items-center gap-1">
@@ -1314,11 +1424,29 @@ function FormField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className={
-          currentBrand.id !== "g8"
-            ? "h-14 bg-white border-2 border-[var(--brand-accent-light)] focus:border-[var(--brand-accent)] rounded-sm text-sm font-semibold focus:ring-2 focus:ring-[var(--brand-accent-light)] transition-all placeholder:text-neutral-400 text-neutral-800 shadow-sm"
-            : "h-14 bg-white border-2 border-neutral-200 rounded-sm text-sm font-black focus:ring-2 focus:ring-[var(--brand-accent)]/30 focus:border-[var(--brand-accent)] transition-all placeholder:text-neutral-400 text-[#0c0a09] shadow-sm"
+          [
+            "h-14 bg-white rounded-sm text-sm transition-all placeholder:text-neutral-400 shadow-sm",
+            currentBrand.id !== "g8"
+              ? "font-semibold text-neutral-800"
+              : "font-black text-[#0c0a09]",
+            hasError
+              ? "border-2 border-red-500 focus:border-red-600 focus:ring-2 focus:ring-red-200"
+              : currentBrand.id !== "g8"
+                ? "border-2 border-[var(--brand-accent-light)] focus:border-[var(--brand-accent)] focus:ring-2 focus:ring-[var(--brand-accent-light)]"
+                : "border-2 border-neutral-200 focus:border-[var(--brand-accent)] focus:ring-2 focus:ring-[var(--brand-accent)]/30",
+          ].join(" ")
         }
       />
+      {hasError && (
+        <p className="mt-1 whitespace-nowrap text-[10px] md:text-xs font-black uppercase tracking-[0.12em] leading-none text-red-600">
+          {error}
+        </p>
+      )}
+      {isChecking && !hasError && (
+        <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+          Verificando cadastro...
+        </p>
+      )}
     </div>
   );
 }
