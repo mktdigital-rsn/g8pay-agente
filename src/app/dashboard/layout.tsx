@@ -78,7 +78,15 @@ const adminMenuGroups: { label?: string; items: MenuItem[] }[] = [
   {
     items: [
       { icon: Home, label: "Início", href: "/dashboard" },
-      { icon: Shield, label: "Compliance E.C.", href: "/dashboard/compliance" },
+      {
+        icon: Shield,
+        label: "Compliance",
+        href: "#",
+        submenu: [
+          { icon: Store, label: "E.C.", href: "/dashboard/compliance" },
+          { icon: Users, label: "Agentes", href: "/dashboard/compliance/agentes" },
+        ],
+      },
       { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
     ]
   }

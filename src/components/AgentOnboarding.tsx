@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -15,12 +16,18 @@ import {
   ArrowRight,
   Sparkles,
   Maximize2,
-  X
+  X,
+  Smartphone
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import api from "@/lib/api";
+
+const APP_STORE_LINKS = {
+  android: "https://play.google.com/store/search?q=Banco%20G8&c=apps",
+  ios: "https://apps.apple.com/br/search?term=Banco%20G8",
+};
 
 const YellowTriangleRedQuestion = () => (
   <svg 
@@ -434,6 +441,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
     { title: "Dados Pessoais", icon: User },
     { title: "Endereço", icon: MapPin },
     { title: "Indicação", icon: Users },
+    { title: "App G8Pay", icon: Smartphone },
     { title: "Conclusão", icon: CheckCircle2 }
   ];
 
@@ -597,7 +605,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
           </div>
           <div className="text-right">
             <span className="text-xs font-bold text-neutral-400">Passo</span>
-            <div className="text-2xl font-black text-brand-accent">{step} <span className="text-white/20 text-sm">/ 4</span></div>
+            <div className="text-2xl font-black text-brand-accent">{step} <span className="text-white/20 text-sm">/ 5</span></div>
           </div>
         </div>
 
@@ -628,7 +636,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
                 >
                   {info.title}
                 </span>
-                {idx < 3 && <div className="h-[1px] w-8 bg-white/5" />}
+                {idx < stepsInfo.length - 1 && <div className="h-[1px] w-8 bg-white/5" />}
               </div>
             );
           })}
@@ -1041,6 +1049,73 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
               )}
 
               {step === 4 && (
+                <div className="space-y-6">
+                  <div className="border-b border-white/5 pb-2">
+                    <h3 className="text-lg font-bold text-white">Baixe o App G8Pay</h3>
+                    <p className="text-xs text-neutral-400">Antes de assinar o contrato, instale o aplicativo oficial e entre com sua conta de agente.</p>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/10 rounded-sm p-6 md:p-8 space-y-6 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,119,17,0.15),transparent_38%)] pointer-events-none" />
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
+                      <div className="w-20 h-20 rounded-2xl bg-[#141416] border border-white/10 shadow-2xl flex items-center justify-center shrink-0 overflow-hidden p-2">
+                        <Image src="/logo_g8_white.png" alt="G8Pay" width={68} height={68} className="object-contain" />
+                      </div>
+                      <div className="space-y-2 flex-1">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/20 text-brand-accent text-[10px] font-black uppercase tracking-[0.18em]">
+                          <Smartphone className="h-3.5 w-3.5" />
+                          Banco G8 nas lojas
+                        </div>
+                        <h4 className="text-xl md:text-2xl font-black text-white tracking-tight">
+                          Baixe o app oficial para continuar seu onboarding
+                        </h4>
+                        <p className="text-sm text-neutral-300 leading-relaxed max-w-2xl">
+                          Detectamos automaticamente seu sistema operacional e abrimos a loja certa. Na loja, o aplicativo aparece como <strong className="text-white">Banco G8</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="rounded-[2px] border border-white/10 bg-black/20 p-4 space-y-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">O que você ganha no app</p>
+                        <ul className="space-y-2 text-sm text-neutral-200">
+                          <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Acesso rápido ao painel de agente</li>
+                          <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Acompanhamento de contratos e credenciamentos</li>
+                          <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-400" /> Mais agilidade para ativar e vender</li>
+                        </ul>
+                      </div>
+                      <div className="rounded-[2px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">Escolha a loja certa</p>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-neutral-200">iPhone / iPad</span>
+                          <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-neutral-200">Android</span>
+                          <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-neutral-200">Mac</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => window.open(APP_STORE_LINKS.android, "_blank", "noopener,noreferrer")}
+                            className="h-12 rounded-[2px] border border-white/10 bg-black/20 px-3 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-200 hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <span className="text-base leading-none">▶</span>
+                            <span>Google Play</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => window.open(APP_STORE_LINKS.ios, "_blank", "noopener,noreferrer")}
+                            className="h-12 rounded-[2px] border border-white/10 bg-black/20 px-3 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-200 hover:bg-white/5 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <span className="text-base leading-none"></span>
+                            <span>App Store</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step === 5 && (
                 <div className="space-y-4">
                   <div className="border-b border-white/5 pb-2">
                     <h3 className="text-lg font-bold text-white">Confirmação dos Dados</h3>
@@ -1371,7 +1446,7 @@ export default function AgentOnboarding({ onBack }: AgentOnboardingProps) {
             >
               Voltar
             </Button>
-            {step < 4 ? (
+            {step < stepsInfo.length ? (
               <Button
                 onClick={handleNext}
                 className="flex-1 h-12 font-bold tracking-wider text-white bg-brand-accent hover:bg-brand-accent-hover rounded-[2px] transition-all cursor-pointer"
