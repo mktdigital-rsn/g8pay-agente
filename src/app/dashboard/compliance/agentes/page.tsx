@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
   Search,
   Shield,
   Store,
+  X,
   Users,
 } from "lucide-react";
 
@@ -44,6 +45,18 @@ type AgentCrmRecord = {
   latestEstablishmentStatus?: string;
   latestActivityAt?: string;
   source?: "api" | "fallback";
+  establishments?: AgentEstablishmentRecord[];
+};
+
+type AgentEstablishmentRecord = {
+  id: string;
+  nomeFantasia: string;
+  cnpjCpf: string;
+  status: string;
+  city?: string;
+  state?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type EstablishmentRecord = {
@@ -51,6 +64,7 @@ type EstablishmentRecord = {
   agentId: string;
   agentName?: string;
   agentCpf?: string;
+  cnpjCpf: string;
   nomeFantasia: string;
   status: string;
   city?: string;
@@ -72,6 +86,10 @@ function formatDate(value?: string | null) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("pt-BR");
+}
+
+function toUpperText(value?: string | null) {
+  return (value || "---").toUpperCase();
 }
 
 function maskCpf(value?: string | null) {
@@ -101,9 +119,35 @@ function csvEscape(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function AgentMetric({ label, value }: { label: string; value: string }) {
+function AgentMetric({
+  label,
+  value,
+  interactive = false,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  interactive?: boolean;
+  onClick?: () => void;
+}) {
+  const sharedClasses =
+    "rounded-[2px] border bg-white p-4 shadow-sm min-w-0 flex flex-col items-center justify-center text-center transition-all";
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${sharedClasses} border-neutral-100 cursor-pointer hover:border-brand-accent hover:shadow-md hover:-translate-y-[1px]`}
+      >
+        <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">{label}</p>
+        <p className="mt-2 text-lg font-black text-[#0c0a09] leading-none break-words">{value}</p>
+      </button>
+    );
+  }
+
   return (
-    <div className="rounded-[2px] border border-neutral-100 bg-white p-4 shadow-sm min-w-0 flex flex-col items-center justify-center text-center">
+    <div className={`${sharedClasses} border-neutral-100`}>
       <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.14em] text-neutral-400">{label}</p>
       <p className="mt-2 text-lg font-black text-[#0c0a09] leading-none break-words">{value}</p>
     </div>
@@ -118,6 +162,7 @@ export default function ComplianceAgentsPage() {
   const [contractFilter, setContractFilter] = useState<"all" | "signed" | "pending">("all");
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [exporting, setExporting] = useState(false);
+  const [isEstablishmentsModalOpen, setIsEstablishmentsModalOpen] = useState(false);
 
   const normalizeApiAgent = (raw: Record<string, unknown>): AgentCrmRecord => ({
     agentId: String(raw.agentId || raw.id || ""),
@@ -139,6 +184,9 @@ export default function ComplianceAgentsPage() {
     latestEstablishmentStatus: raw.latestEstablishmentStatus ? String(raw.latestEstablishmentStatus) : raw.latestEcStatus ? String(raw.latestEcStatus) : undefined,
     latestActivityAt: raw.latestActivityAt ? String(raw.latestActivityAt) : raw.updatedAt ? String(raw.updatedAt) : raw.createdAt ? String(raw.createdAt) : undefined,
     source: "api",
+    establishments: Array.isArray(raw.establishments)
+      ? (raw.establishments as AgentEstablishmentRecord[])
+      : [],
   });
 
   const buildFallbackDataset = async (rows: EstablishmentRecord[]) => {
@@ -187,6 +235,8 @@ export default function ComplianceAgentsPage() {
           agentId,
           fullName: latest?.agentName || "Agente sem nome",
           cpf: latest?.agentCpf || "---",
+          email: undefined,
+          whatsapp: undefined,
           contractStatus,
           contractTitle,
           contractSignedAt,
@@ -199,6 +249,16 @@ export default function ComplianceAgentsPage() {
           latestEstablishmentName: latest?.nomeFantasia,
           latestEstablishmentStatus: latest?.status,
           latestActivityAt: latest?.updatedAt || latest?.createdAt,
+          establishments: establishmentRows.map((establishment) => ({
+            id: establishment.id,
+            nomeFantasia: establishment.nomeFantasia,
+            cnpjCpf: establishment.cnpjCpf,
+            status: establishment.status,
+            city: establishment.city,
+            state: establishment.state,
+            createdAt: establishment.createdAt,
+            updatedAt: establishment.updatedAt,
+          })),
           source: "fallback" as const,
         };
       })
@@ -209,7 +269,7 @@ export default function ComplianceAgentsPage() {
     );
   };
 
-  const loadAgents = async () => {
+  const loadAgents = useCallback(async () => {
     setLoading(true);
     try {
       try {
@@ -238,11 +298,11 @@ export default function ComplianceAgentsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadAgents();
-  }, []);
+  }, [loadAgents]);
 
   const filteredAgents = useMemo(() => {
     const search = normalizeText(searchQuery);
@@ -468,8 +528,8 @@ export default function ComplianceAgentsPage() {
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div className="space-y-3">
                           <div className="flex flex-wrap items-center gap-3">
-                            <h3 className="text-lg md:text-xl font-black text-[#0c0a09] tracking-tight">
-                              {agent.fullName}
+                            <h3 className="text-lg md:text-xl font-black text-[#0c0a09] tracking-tight uppercase">
+                              {toUpperText(agent.fullName)}
                             </h3>
                             {statusBadge(agent.contractStatus)}
                           </div>
@@ -487,10 +547,18 @@ export default function ComplianceAgentsPage() {
                         </div>
 
                         <div className="grid grid-cols-3 gap-3 w-full max-w-[420px] ml-auto">
-                          <div className="rounded-[2px] bg-neutral-50 border border-neutral-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAgentId(agent.agentId);
+                              setIsEstablishmentsModalOpen(true);
+                            }}
+                            className="rounded-[2px] bg-neutral-50 border border-neutral-100 p-4 min-w-0 flex flex-col items-center justify-center text-center transition-all hover:border-brand-accent hover:bg-brand-accent/5"
+                            aria-label={`Ver E.C. vinculados de ${agent.fullName}`}
+                          >
                             <p className="text-[9px] font-black uppercase tracking-[0.18em] text-neutral-400">E.C.</p>
                             <p className="mt-2 text-lg font-black leading-none">{agent.totalEstablishments}</p>
-                          </div>
+                          </button>
                           <div className="rounded-[2px] bg-emerald-50 border border-emerald-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
                             <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Aprovados</p>
                             <p className="mt-2 text-lg font-black text-emerald-700 leading-none">{agent.approvedEstablishments}</p>
@@ -519,9 +587,9 @@ export default function ComplianceAgentsPage() {
                           <Users className="h-3.5 w-3.5" />
                           Ficha do Agente
                         </div>
-                        <h2 className="mt-3 text-2xl font-black tracking-tight text-[#0c0a09]">
-                          {selectedAgent.fullName}
-                        </h2>
+                    <h2 className="mt-3 text-2xl font-black tracking-tight text-[#0c0a09] uppercase">
+                          {toUpperText(selectedAgent.fullName)}
+                    </h2>
                         <p className="mt-1 text-xs font-bold uppercase tracking-widest text-neutral-400">
                           {selectedAgent.agentId}
                         </p>
@@ -537,7 +605,12 @@ export default function ComplianceAgentsPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <AgentMetric label="Situação do contrato" value={statusLabel(selectedAgent.contractStatus)} />
-                    <AgentMetric label="E.C. vinculados" value={String(selectedAgent.totalEstablishments)} />
+                    <AgentMetric
+                      label="E.C. vinculados"
+                      value={String(selectedAgent.totalEstablishments)}
+                      interactive
+                      onClick={() => setIsEstablishmentsModalOpen(true)}
+                    />
                     <AgentMetric label="Última atividade" value={formatDate(selectedAgent.latestActivityAt)} />
                     <AgentMetric label="Contrato assinado em" value={formatDate(selectedAgent.contractSignedAt)} />
                   </div>
@@ -610,6 +683,64 @@ export default function ComplianceAgentsPage() {
             </Card>
           </div>
         </div>
+
+        {isEstablishmentsModalOpen && selectedAgent && (
+          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-3xl bg-white rounded-[18px] shadow-2xl border border-neutral-100 overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="flex items-start justify-between gap-4 p-6 border-b border-neutral-100">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">E.C. do Agente</p>
+                  <h3 className="mt-1 text-2xl font-black text-[#0c0a09] uppercase">{toUpperText(selectedAgent.fullName)}</h3>
+                  <p className="mt-1 text-sm font-medium text-neutral-500">
+                    {selectedAgent.totalEstablishments} estabelecimentos vinculados
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEstablishmentsModalOpen(false)}
+                  className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3">
+                {selectedAgent.establishments && selectedAgent.establishments.length > 0 ? (
+                  selectedAgent.establishments.map((establishment) => (
+                    <div
+                      key={establishment.id}
+                      className="rounded-[12px] border border-neutral-100 bg-neutral-50/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-base font-black text-[#0c0a09] uppercase break-words">
+                            {toUpperText(establishment.nomeFantasia)}
+                          </p>
+                          <Badge className="bg-white text-neutral-600 border border-neutral-200 rounded-full px-2.5 py-1 font-black text-[8px] uppercase tracking-widest">
+                            {establishment.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs font-bold text-neutral-500 uppercase tracking-[0.14em]">
+                          {establishment.cnpjCpf} {establishment.city || establishment.state ? `• ${[establishment.city, establishment.state].filter(Boolean).join("/")}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs font-bold text-neutral-500 uppercase tracking-[0.14em]">
+                        <p>Criado em {formatDate(establishment.createdAt)}</p>
+                        <p>Atualizado em {formatDate(establishment.updatedAt)}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[12px] border border-dashed border-neutral-200 bg-neutral-50 p-8 text-center">
+                    <p className="text-sm font-bold text-neutral-500">
+                      Esse agente ainda não possui E.C. credenciado.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

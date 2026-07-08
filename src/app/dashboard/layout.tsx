@@ -83,8 +83,8 @@ const adminMenuGroups: { label?: string; items: MenuItem[] }[] = [
         label: "Compliance",
         href: "#",
         submenu: [
-          { icon: Store, label: "E.C.", href: "/dashboard/compliance" },
           { icon: Users, label: "Agentes", href: "/dashboard/compliance/agentes" },
+          { icon: Store, label: "E.C.", href: "/dashboard/compliance" },
         ],
       },
       { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
@@ -411,18 +411,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <button
                           onClick={() => setExpandedMenus(prev => ({ ...prev, [item.label]: !prev[item.label] }))}
                           className={`flex items-center gap-5 px-6 py-3 w-full rounded-md transition-all group relative overflow-hidden border border-transparent ${
-                            isAnySubActive
-                              ? "text-brand-accent bg-white shadow-lg shadow-brand-accent/5"
-                              : "text-white/80 hover:bg-white hover:text-brand-accent"
+                            expandedMenus[item.label]
+                              ? "text-white bg-white/5 border-white/10"
+                              : "text-white/80 hover:bg-white/5 hover:text-brand-accent"
                           }`}
                         >
-                          <item.icon className={`h-5 w-5 relative z-10 ${isAnySubActive ? "text-brand-accent" : "text-white/60 group-hover:text-brand-accent"}`} />
+                          <item.icon className={`h-5 w-5 relative z-10 ${expandedMenus[item.label] ? "text-white" : "text-white/60 group-hover:text-brand-accent"}`} />
                           <div className="flex items-center justify-between flex-1 relative z-10">
-                            <span className={`text-[11px] uppercase tracking-[0.15em] font-black ${isAnySubActive ? "text-brand-accent" : "text-white/80 group-hover:text-brand-accent transition-colors duration-300"}`}>{item.label}</span>
+                            <span className={`text-[11px] uppercase tracking-[0.15em] font-black ${expandedMenus[item.label] ? "text-white" : "text-white/80 group-hover:text-brand-accent transition-colors duration-300"}`}>{item.label}</span>
                             {expandedMenus[item.label] ? (
                               <ChevronUp className="h-4 w-4 text-brand-accent relative z-10 shrink-0" />
                             ) : (
-                              <ChevronDown className={`h-4 w-4 relative z-10 shrink-0 ${isAnySubActive ? "text-brand-accent" : "text-white/60 group-hover:text-brand-accent"}`} />
+                              <ChevronDown className="h-4 w-4 relative z-10 shrink-0 text-white/60 group-hover:text-brand-accent" />
                             )}
                           </div>
                         </button>
