@@ -34,6 +34,8 @@ import {
   Cpu,
   Store,
   Upload,
+  Edit2,
+  Save,
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
@@ -87,11 +89,51 @@ type EstablishmentDocument = {
 type EstablishmentDetails = Establishment & {
   documents: EstablishmentDocument[];
 };
+
+type EstablishmentEditForm = {
+  tipoEstabelecimento: string;
+  cnpjCpf: string;
+  razaoSocial: string;
+  tipoEmpresa: string;
+  nomeFantasia: string;
+  contatoPrincipal: string;
+  dataFundacao: string;
+  horarioFuncionamento: string;
+  site: string;
+  shopping: string;
+  descricaoShopping: string;
+  mcc: string;
+  cnae: string;
+  faturamentoMensal: string;
+  ticketMedio: string;
+  antecipacaoRecebiveis: string;
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  state: string;
+  quantidade: string;
+  contactsJson: string;
+  bankAccountsJson: string;
+};
+
+type EditSection = "cadastro" | "address" | "bank" | "contacts";
+
+type EditSectionConfig = {
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
 export default function MeusClientesPage() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEc, setSelectedEc] = useState<EstablishmentDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [editSection, setEditSection] = useState<EditSection | null>(null);
+  const [editForm, setEditForm] = useState<EstablishmentEditForm | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -203,6 +245,143 @@ export default function MeusClientesPage() {
       setLoadingDetails(false);
     }
   };
+  const editSectionConfig: Record<EditSection, EditSectionConfig> = {
+    cadastro: {
+      title: "Dados Cadastrais",
+      description: "Atualize os dados principais do estabelecimento comercial.",
+      icon: Building2,
+    },
+    address: {
+      title: "Endereço de Instalação",
+      description: "Atualize o endereço e o mapa da localização.",
+      icon: MapPin,
+    },
+    bank: {
+      title: "Conta de Repasse Cadastrada",
+      description: "Corrija os dados bancários de repasse.",
+      icon: CreditCard,
+    },
+    contacts: {
+      title: "Contatos do Estabelecimento",
+      description: "Atualize os responsáveis e contatos cadastrados.",
+      icon: User,
+    },
+  };
+
+  const openEditSection = (section: EditSection) => {
+    if (!selectedEc) return;
+    setEditForm({
+      tipoEstabelecimento: selectedEc.tipoEstabelecimento || "",
+      cnpjCpf: selectedEc.cnpjCpf || "",
+      razaoSocial: selectedEc.razaoSocial || "",
+      tipoEmpresa: selectedEc.tipoEmpresa || "",
+      nomeFantasia: selectedEc.nomeFantasia || "",
+      contatoPrincipal: selectedEc.contatoPrincipal || "",
+      dataFundacao: selectedEc.dataFundacao || "",
+      horarioFuncionamento: selectedEc.horarioFuncionamento || "",
+      site: selectedEc.site || "",
+      shopping: selectedEc.shopping || "Não",
+      descricaoShopping: selectedEc.descricaoShopping || "",
+      mcc: selectedEc.mcc || "",
+      cnae: selectedEc.cnae || "",
+      faturamentoMensal: selectedEc.faturamentoMensal || "",
+      ticketMedio: selectedEc.ticketMedio || "",
+      antecipacaoRecebiveis: selectedEc.antecipacaoRecebiveis || "",
+      cep: selectedEc.cep || "",
+      rua: selectedEc.rua || "",
+      numero: selectedEc.numero || "",
+      complemento: selectedEc.complemento || "",
+      bairro: selectedEc.bairro || "",
+      cidade: selectedEc.cidade || "",
+      state: selectedEc.state || "",
+      quantidade: selectedEc.quantidade || "1",
+      contactsJson: selectedEc.contactsJson || "[]",
+      bankAccountsJson: selectedEc.bankAccountsJson || "[]",
+    });
+    setEditSection(section);
+  };
+
+  const updateEditField = <K extends keyof EstablishmentEditForm>(field: K, value: EstablishmentEditForm[K]) => {
+    setEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedEc || !editForm || !editSection) return;
+
+    setIsSavingEdit(true);
+    const toastId = toast.loading("Salvando alterações...");
+
+    try {
+      const payload: Partial<EstablishmentEditForm> & {
+        contatos?: unknown;
+        contasBancarias?: unknown;
+      } = {};
+
+      if (editSection === "cadastro") {
+        Object.assign(payload, {
+          tipoEstabelecimento: editForm.tipoEstabelecimento,
+          cnpjCpf: editForm.cnpjCpf,
+          razaoSocial: editForm.razaoSocial,
+          tipoEmpresa: editForm.tipoEmpresa,
+          nomeFantasia: editForm.nomeFantasia,
+          contatoPrincipal: editForm.contatoPrincipal,
+          dataFundacao: editForm.dataFundacao,
+          horarioFuncionamento: editForm.horarioFuncionamento,
+          site: editForm.site,
+          shopping: editForm.shopping,
+          descricaoShopping: editForm.descricaoShopping,
+          mcc: editForm.mcc,
+          cnae: editForm.cnae,
+          quantidade: editForm.quantidade,
+        });
+      }
+
+      if (editSection === "address") {
+        Object.assign(payload, {
+          cep: editForm.cep,
+          rua: editForm.rua,
+          numero: editForm.numero,
+          complemento: editForm.complemento,
+          bairro: editForm.bairro,
+          cidade: editForm.cidade,
+          state: editForm.state,
+        });
+      }
+
+      if (editSection === "contacts") {
+        try {
+          payload.contatos = editForm.contactsJson ? JSON.parse(editForm.contactsJson) : [];
+        } catch {
+          throw new Error("O JSON dos contatos está inválido.");
+        }
+      }
+
+      if (editSection === "bank") {
+        try {
+          payload.contasBancarias = editForm.bankAccountsJson ? JSON.parse(editForm.bankAccountsJson) : [];
+        } catch {
+          throw new Error("O JSON das contas bancárias está inválido.");
+        }
+      }
+
+      const response = await api.patch(`/api/establishments/${selectedEc.id}`, payload);
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível salvar as alterações.");
+      }
+
+      toast.success("E.C. atualizado com sucesso.", { id: toastId });
+      setEditSection(null);
+      await fetchMyEstablishments();
+      await handleSelectEc(selectedEc.id);
+    } catch (err: any) {
+      console.error("Error saving establishment edit:", err);
+      toast.error(err.response?.data?.error || err.message || "Não foi possível salvar as alterações.", { id: toastId });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   const handlePreviewDoc = async (doc: EstablishmentDocument) => {
     if (activePreviewDoc?.id === doc.id) return;
     
@@ -354,7 +533,13 @@ export default function MeusClientesPage() {
                 Visualização do Agente • CNPJ/CPF: <span className="text-neutral-700 font-black">{selectedEc.cnpjCpf}</span>
               </p>
             </div>
-          </div>
+              <div className="ml-auto hidden xl:flex gap-2">
+                <EditBlockButton label="Cadastro" onClick={() => openEditSection("cadastro")} />
+                <EditBlockButton label="Endereço" onClick={() => openEditSection("address")} />
+                <EditBlockButton label="Conta" onClick={() => openEditSection("bank")} />
+                <EditBlockButton label="Contatos" onClick={() => openEditSection("contacts")} />
+              </div>
+            </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
             {/* Left Column: Register Data, Address & Risk Assessment */}
@@ -362,9 +547,12 @@ export default function MeusClientesPage() {
               
               {/* 1. DADOS CADASTRAIS (Compact, no address, styled with icons/slots) */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6">
-                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-brand-accent" /> Dados Cadastrais
-                </h3>
+                <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+                  <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-brand-accent" /> Dados Cadastrais
+                  </h3>
+                  <SectionEditIconButton onClick={() => openEditSection("cadastro")} />
+                </div>
                 
                 <div className="space-y-6">
                   {/* Razão Social Banner */}
@@ -399,9 +587,12 @@ export default function MeusClientesPage() {
 
               {/* 2. ENDEREÇO DE INSTALAÇÃO (Isolated in a new Card below Dados Cadastrais) */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-amber-500 shadow-xl space-y-6 flex flex-col flex-1">
-                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
-                </h3>
+                <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+                  <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider flex items-center gap-2">
+                    <MapPin className="h-5 w-5 text-amber-500" /> Endereço de Instalação
+                  </h3>
+                  <SectionEditIconButton onClick={() => openEditSection("address")} />
+                </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
                   <InfoItem size="lg" label="Rua / Logradouro" value={`${selectedEc.rua}, Nº ${selectedEc.numero}`} icon={MapPin} className="sm:col-span-2" />
@@ -414,9 +605,12 @@ export default function MeusClientesPage() {
 
                 {/* Contatos do Estabelecimento */}
                 <div className="border-t border-neutral-100 pt-6 mt-4 space-y-6">
-                  <h4 className="text-xs font-black text-[#0c0a09] uppercase tracking-widest flex items-center gap-2">
-                    <User className="h-4.5 w-4.5 text-amber-500" /> Contatos do Estabelecimento
-                  </h4>
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-xs font-black text-[#0c0a09] uppercase tracking-widest flex items-center gap-2">
+                      <User className="h-4.5 w-4.5 text-amber-500" /> Contatos do Estabelecimento
+                    </h4>
+                    <SectionEditIconButton onClick={() => openEditSection("contacts")} />
+                  </div>
                   {contacts.length > 0 ? (
                     <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-neutral-200 scrollbar-track-transparent">
                       {contacts.map((c: any, idx: number) => (
@@ -531,9 +725,12 @@ export default function MeusClientesPage() {
 
               {/* 3. CONTA DE REPASSE */}
               <Card className="p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-blue-400 shadow-xl space-y-4">
-                <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-3 flex items-center gap-2">
-                  <Building className="h-5 w-5 text-blue-400" /> Conta de Repasse Cadastrada
-                </h3>
+                <div className="flex items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+                  <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider flex items-center gap-2">
+                    <Building className="h-5 w-5 text-blue-400" /> Conta de Repasse Cadastrada
+                  </h3>
+                  <SectionEditIconButton onClick={() => openEditSection("bank")} />
+                </div>
                 {bankAccounts.length > 0 ? (
                   bankAccounts.map((b: any, idx: number) => (
                     <div key={idx} className="space-y-3">
@@ -1008,6 +1205,148 @@ export default function MeusClientesPage() {
           )}
         </div>
       )}
+      {editSection && editForm && (
+        <div className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-[18px] shadow-2xl border border-neutral-100 overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-neutral-100 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Editar E.C.</p>
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-brand-accent/20 bg-brand-accent/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-brand-accent">
+                  {React.createElement(editSectionConfig[editSection].icon, { className: "h-3.5 w-3.5" })}
+                  {editSectionConfig[editSection].title}
+                </div>
+                <h3 className="mt-1 text-2xl font-black text-[#0c0a09] uppercase">{selectedEc?.nomeFantasia}</h3>
+                <p className="mt-1 text-sm text-neutral-500 font-medium">
+                  {editSectionConfig[editSection].description}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditSection(null)}
+                className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+              {editSection === "cadastro" && (
+                <div className="space-y-4">
+                  <SectionTitle title="Dados do Cadastro" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      ["tipoEstabelecimento", "Tipo de Estabelecimento"],
+                      ["tipoEmpresa", "Tipo de Empresa"],
+                      ["cnpjCpf", "CNPJ/CPF"],
+                      ["nomeFantasia", "Nome Fantasia"],
+                      ["razaoSocial", "Razão Social"],
+                      ["contatoPrincipal", "Contato Principal"],
+                      ["dataFundacao", "Fundação"],
+                      ["horarioFuncionamento", "Horário de Funcionamento"],
+                      ["site", "Site"],
+                      ["shopping", "Shopping?"],
+                      ["descricaoShopping", "Descrição do Shopping"],
+                      ["mcc", "MCC"],
+                      ["cnae", "CNAE"],
+                      ["quantidade", "Quantidade de Máquinas"],
+                    ].map(([field, label]) => (
+                      <div key={field} className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">{label}</label>
+                        <input
+                          type="text"
+                          value={editForm[field as keyof EstablishmentEditForm]}
+                          onChange={(e) => updateEditField(field as keyof EstablishmentEditForm, e.target.value)}
+                          className="w-full h-11 px-4 rounded-sm border border-neutral-200 bg-white text-sm text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {editSection === "address" && (
+                <div className="space-y-4">
+                  <SectionTitle title="Endereço de Instalação" subtitle="Ao salvar, a localização do mapa será atualizada automaticamente." />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {[
+                      ["cep", "CEP"],
+                      ["rua", "Rua / Logradouro"],
+                      ["numero", "Número"],
+                      ["complemento", "Complemento"],
+                      ["bairro", "Bairro"],
+                      ["cidade", "Cidade"],
+                      ["state", "Estado / UF"],
+                    ].map(([field, label]) => (
+                      <div key={field} className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">{label}</label>
+                        <input
+                          type="text"
+                          value={editForm[field as keyof EstablishmentEditForm]}
+                          onChange={(e) => updateEditField(field as keyof EstablishmentEditForm, e.target.value)}
+                          className="w-full h-11 px-4 rounded-sm border border-neutral-200 bg-white text-sm text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {editSection === "bank" && (
+                <div className="space-y-4">
+                  <SectionTitle title="Conta de Repasse Cadastrada" subtitle="Edite a conta vinculada ao repasse do estabelecimento." />
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Contas Bancárias JSON</label>
+                    <textarea
+                      value={editForm.bankAccountsJson}
+                      onChange={(e) => updateEditField("bankAccountsJson", e.target.value)}
+                      className="w-full min-h-[260px] px-4 py-3 rounded-sm border border-neutral-200 bg-white text-sm text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent font-mono"
+                      placeholder='[{"banco":"...","agencia":"..."}]'
+                    />
+                  </div>
+                </div>
+              )}
+
+              {editSection === "contacts" && (
+                <div className="space-y-4">
+                  <SectionTitle title="Contatos do Estabelecimento" subtitle="Atualize os responsáveis e contatos cadastrados nesse E.C." />
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Contatos JSON</label>
+                    <textarea
+                      value={editForm.contactsJson}
+                      onChange={(e) => updateEditField("contactsJson", e.target.value)}
+                      className="w-full min-h-[260px] px-4 py-3 rounded-sm border border-neutral-200 bg-white text-sm text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent font-mono"
+                      placeholder='[{"nome":"...","telefone":"..."}]'
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-neutral-100 flex flex-col sm:flex-row justify-end gap-3">
+              <Button
+                type="button"
+                onClick={() => setEditSection(null)}
+                className="h-11 px-5 rounded-sm bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 font-black text-[10px] uppercase tracking-widest"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleSaveEdit()}
+                disabled={isSavingEdit}
+                className="h-11 px-5 rounded-sm bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
+              >
+                {isSavingEdit ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Salvar alterações
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Fullscreen Preview Modal */}
       {isModalOpen && activePreviewDoc && previewBlobUrl && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1069,6 +1408,40 @@ export default function MeusClientesPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+function EditBlockButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 h-10 px-4 rounded-sm border border-neutral-200 bg-white hover:bg-neutral-50 text-[#0c0a09] text-[10px] font-black uppercase tracking-widest shadow-sm transition-colors"
+    >
+      <Edit2 className="h-4 w-4 text-brand-accent" />
+      {label}
+    </button>
+  );
+}
+
+function SectionEditIconButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-8 w-8 rounded-full border border-neutral-200 bg-white text-neutral-500 hover:text-brand-accent hover:border-brand-accent/30 hover:bg-brand-accent/5 flex items-center justify-center transition-colors shrink-0"
+      aria-label="Editar seção"
+    >
+      <Edit2 className="h-4 w-4" />
+    </button>
+  );
+}
+
+function SectionTitle({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="space-y-1">
+      <h4 className="text-xs font-black text-[#0c0a09] uppercase tracking-widest border-b border-neutral-100 pb-2">{title}</h4>
+      {subtitle && <p className="text-[11px] font-medium text-neutral-500">{subtitle}</p>}
     </div>
   );
 }

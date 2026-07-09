@@ -13,6 +13,7 @@ import {
   Search,
   LogOut,
   RotateCw,
+  Loader2,
   CreditCard,
   Clock,
   Banknote,
@@ -29,11 +30,14 @@ import {
   FolderOpen,
   Menu,
   X,
-  Users
+  Users,
+  Bell,
+  Send,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -53,6 +57,33 @@ interface MenuItem {
   type?: 'link' | 'separator';
   submenu?: { icon: any; label: string; href: string }[];
 }
+
+type DashboardNotification = {
+  id: string;
+  title: string;
+  message: string;
+  scope: "all" | "agent" | "establishment";
+  contextLabel: string;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string | null;
+};
+
+type NotificationScope = "all" | "agent" | "establishment";
+
+type NotificationAgentOption = {
+  id: string;
+  fullName: string;
+  cpf?: string;
+};
+
+type NotificationEstablishmentOption = {
+  id: string;
+  nomeFantasia: string;
+  cnpjCpf?: string;
+  agentId?: string;
+  agentName?: string;
+};
 
 const menuGroups: { label?: string; items: MenuItem[] }[] = [
   {
@@ -103,6 +134,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    const [expandedMenus, setExpandedMenus] = React.useState<Record<string, boolean>>({});
    const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
    const [userRole, setUserRole] = React.useState("agent");
+   const [agentId, setAgentId] = React.useState("");
+   const [notifications, setNotifications] = React.useState<DashboardNotification[]>([]);
+   const [isNotificationsOpen, setIsNotificationsOpen] = React.useState(false);
+   const [isNotificationsLoading, setIsNotificationsLoading] = React.useState(false);
+   const [isNotificationComposerOpen, setIsNotificationComposerOpen] = React.useState(false);
+   const [notificationTitle, setNotificationTitle] = React.useState("");
+   const [notificationMessage, setNotificationMessage] = React.useState("");
+   const [notificationScope, setNotificationScope] = React.useState<NotificationScope>("all");
+   const [notificationTargetAgentId, setNotificationTargetAgentId] = React.useState("");
+   const [notificationTargetEstablishmentId, setNotificationTargetEstablishmentId] = React.useState("");
+   const [adminAgents, setAdminAgents] = React.useState<NotificationAgentOption[]>([]);
+   const [adminEstablishments, setAdminEstablishments] = React.useState<NotificationEstablishmentOption[]>([]);
+  const [isNotificationTargetsLoading, setIsNotificationTargetsLoading] = React.useState(false);
+  const [isSendingNotification, setIsSendingNotification] = React.useState(false);
+  const notificationsPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const selectedAgentEstablishments = React.useMemo(() => {
+    if (!notificationTargetAgentId) return [];
+    return adminEstablishments.filter((ec) => ec.agentId === notificationTargetAgentId);
+  }, [adminEstablishments, notificationTargetAgentId]);
 
    React.useEffect(() => {
      const activeGroups = userRole === "admin" ? adminMenuGroups : menuGroups;
@@ -125,7 +175,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   React.useEffect(() => {
     const fetchData = async () => {
       const localRole = typeof window !== "undefined" ? localStorage.getItem("userRole") : "agent";
+      const localAgentId = typeof window !== "undefined" ? localStorage.getItem("agentId") : "";
       setUserRole(localRole || "agent");
+      setAgentId(localAgentId || "");
       // Fetch details from localStorage if in bypass/demo mode
       const localName = typeof window !== "undefined" ? localStorage.getItem("userName") : null;
       const signedContractStr = typeof window !== "undefined" ? localStorage.getItem("signedContract") : null;
@@ -211,6 +263,192 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     fetchBalance();
   }, [pathname, setGlobalBalance, setGlobalBalanceLoading]);
 
+  const loadNotifications = React.useCallback(async (currentAgentId: string) => {
+    if (!currentAgentId) {
+      setNotifications([]);
+      return;
+    }
+
+    setIsNotificationsLoading(true);
+    try {
+      const response = await api.get("/api/notifications", {
+        params: { agentId: currentAgentId },
+      });
+
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        setNotifications(response.data.data);
+      } else {
+        setNotifications([]);
+      }
+    } catch (error) {
+      console.error("Error loading notifications:", error);
+      setNotifications([]);
+    } finally {
+      setIsNotificationsLoading(false);
+    }
+  }, []);
+
+  const openAdminNotificationComposer = React.useCallback(() => {
+    if (userRole !== "admin") return;
+    setIsNotificationsOpen(false);
+    setNotificationTitle("Comunicado geral");
+    setNotificationMessage("");
+    setNotificationScope("all");
+    setNotificationTargetAgentId("");
+    setNotificationTargetEstablishmentId("");
+    setIsNotificationComposerOpen(true);
+  }, [userRole]);
+
+  const loadNotificationTargets = React.useCallback(async () => {
+    if (userRole !== "admin") return;
+
+    setIsNotificationTargetsLoading(true);
+    try {
+      const [agentsResponse, establishmentsResponse] = await Promise.all([
+        api.get("/api/agents/admin"),
+        api.get("/api/establishments"),
+      ]);
+
+      if (agentsResponse.data?.success && Array.isArray(agentsResponse.data.data)) {
+        setAdminAgents(
+          agentsResponse.data.data.map((agent: any) => ({
+            id: String(agent.agentId || agent.id || ""),
+            fullName: String(agent.fullName || agent.name || "Agente sem nome"),
+            cpf: agent.cpf ? String(agent.cpf) : undefined,
+          })).filter((agent: NotificationAgentOption) => agent.id)
+        );
+      } else {
+        setAdminAgents([]);
+      }
+
+      if (establishmentsResponse.data?.success && Array.isArray(establishmentsResponse.data.data)) {
+        setAdminEstablishments(
+          establishmentsResponse.data.data.map((ec: any) => ({
+            id: String(ec.id || ""),
+            nomeFantasia: String(ec.nomeFantasia || ec.razaoSocial || "E.C. sem nome"),
+            cnpjCpf: ec.cnpjCpf ? String(ec.cnpjCpf) : undefined,
+            agentId: ec.agentId ? String(ec.agentId) : undefined,
+          })).filter((ec: NotificationEstablishmentOption) => ec.id)
+        );
+      } else {
+        setAdminEstablishments([]);
+      }
+    } catch (error) {
+      console.error("Error loading notification targets:", error);
+      setAdminAgents([]);
+      setAdminEstablishments([]);
+    } finally {
+      setIsNotificationTargetsLoading(false);
+    }
+  }, [userRole]);
+
+  const handleSendAdminNotification = React.useCallback(async () => {
+    const title = notificationTitle.trim();
+    const message = notificationMessage.trim();
+
+    if (!title || !message) {
+      toast.error("Preencha o título e a mensagem da notificação.");
+      return;
+    }
+
+    if (notificationScope === "agent" && !notificationTargetAgentId) {
+      toast.error("Selecione um agente para a notificação.");
+      return;
+    }
+
+    setIsSendingNotification(true);
+    const toastId = toast.loading("Enviando notificação...");
+
+    try {
+      const response = await api.post("/api/notifications", {
+        title,
+        message,
+        scope: notificationScope,
+        targetAgentId: notificationScope === "agent" ? notificationTargetAgentId : undefined,
+        targetEstablishmentId: notificationScope === "agent" && notificationTargetEstablishmentId
+          ? notificationTargetEstablishmentId
+          : undefined,
+        createdByRole: "admin",
+        createdByName: userName || "Admin",
+      });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível criar a notificação.");
+      }
+
+      toast.success("Notificação enviada com sucesso!", { id: toastId });
+      setIsNotificationComposerOpen(false);
+      setNotificationMessage("");
+      setNotificationScope("all");
+      setNotificationTargetAgentId("");
+      setNotificationTargetEstablishmentId("");
+    } catch (error: any) {
+      console.error("Error sending admin notification:", error);
+      toast.error(error.response?.data?.error || error.message || "Não foi possível enviar a notificação.", { id: toastId });
+    } finally {
+      setIsSendingNotification(false);
+    }
+  }, [
+    notificationMessage,
+    notificationScope,
+    notificationTargetAgentId,
+    notificationTargetEstablishmentId,
+    notificationTitle,
+    userName,
+  ]);
+
+  React.useEffect(() => {
+    if (isNotificationComposerOpen && userRole === "admin") {
+      void loadNotificationTargets();
+    }
+  }, [isNotificationComposerOpen, loadNotificationTargets, userRole]);
+
+  React.useEffect(() => {
+    if (!agentId) return;
+    void loadNotifications(agentId);
+  }, [agentId, loadNotifications, pathname]);
+
+  React.useEffect(() => {
+    if (!isNotificationsOpen || !agentId) return;
+
+    const unreadNotifications = notifications.filter(notification => !notification.isRead);
+    if (unreadNotifications.length === 0) return;
+
+    const markAsRead = async () => {
+      try {
+        await Promise.all(
+          unreadNotifications.map((notification) =>
+            api.patch(`/api/notifications/${notification.id}/read`, { agentId })
+          )
+        );
+        await loadNotifications(agentId);
+      } catch (error) {
+        console.error("Error marking notifications as read:", error);
+      }
+    };
+
+    void markAsRead();
+  }, [agentId, isNotificationsOpen, loadNotifications, notifications]);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        notificationsPanelRef.current &&
+        !notificationsPanelRef.current.contains(event.target as Node)
+      ) {
+        setIsNotificationsOpen(false);
+      }
+    };
+
+    if (isNotificationsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isNotificationsOpen]);
+
   const cleanName = (name: string) => {
     return name.replace(/^\d+(\.\d+)*\s*/, '').split(' ')[0] || "Cliente";
   };
@@ -291,6 +529,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatNotificationDate = (value?: string | null) => {
+    if (!value) return "---";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const THEME_BG = 
@@ -558,6 +809,108 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Profile Section */}
             <div className="flex items-center gap-3 sm:gap-6 xl:gap-8 relative">
+              {agentId && (
+                <div ref={notificationsPanelRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsNotificationsOpen(prev => !prev)}
+                    className="relative flex h-11 w-11 items-center justify-center rounded-md border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10 hover:text-brand-accent"
+                    aria-label="Abrir notificações"
+                  >
+                    <Bell className="h-4.5 w-4.5" />
+                    {notifications.some(notification => !notification.isRead) && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-brand-accent text-white text-[9px] font-black leading-none flex items-center justify-center">
+                        {notifications.filter(notification => !notification.isRead).length > 9
+                          ? "9+"
+                          : notifications.filter(notification => !notification.isRead).length}
+                      </span>
+                    )}
+                  </button>
+
+                  {isNotificationsOpen && (
+                    <div className="absolute right-0 top-full mt-3 w-[22rem] max-w-[85vw] rounded-[18px] border border-white/10 bg-[#141210] shadow-2xl overflow-hidden z-50">
+                      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-brand-accent">Sininho</p>
+                          <h3 className="text-sm font-black text-white uppercase tracking-wide">Notificações</h3>
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">
+                          {notifications.filter(notification => !notification.isRead).length} novas
+                        </span>
+                      </div>
+
+                      <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
+                        {isNotificationsLoading ? (
+                          <div className="p-4 space-y-3">
+                            {Array.from({ length: 3 }).map((_, index) => (
+                              <div key={index} className="rounded-[14px] border border-white/8 bg-white/5 p-4 animate-pulse">
+                                <div className="h-3 w-24 bg-white/10 rounded-full" />
+                                <div className="mt-3 h-4 w-4/5 bg-white/10 rounded-full" />
+                                <div className="mt-2 h-3 w-3/5 bg-white/10 rounded-full" />
+                              </div>
+                            ))}
+                          </div>
+                        ) : notifications.length > 0 ? (
+                          <div className="p-3 space-y-3">
+                            {notifications.map((notification) => (
+                              <div
+                                key={notification.id}
+                                className={`rounded-[14px] border p-4 transition-colors ${
+                                  notification.isRead
+                                    ? "border-white/10 bg-white/[0.03]"
+                                    : "border-brand-accent/30 bg-brand-accent/10"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className={`text-[9px] font-black uppercase tracking-[0.22em] ${notification.isRead ? "text-white/40" : "text-brand-accent"}`}>
+                                      {notification.contextLabel}
+                                    </p>
+                                    <h4 className="mt-1 text-sm font-black text-white uppercase tracking-wide break-words">
+                                      {notification.title}
+                                    </h4>
+                                  </div>
+                                  {!notification.isRead && (
+                                    <span className="mt-1 h-2.5 w-2.5 rounded-full bg-brand-accent shrink-0" />
+                                  )}
+                                </div>
+                                <p className="mt-2 text-sm text-white/70 leading-relaxed break-words">
+                                  {notification.message}
+                                </p>
+                                <div className="mt-3 flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-[0.18em] text-white/35">
+                                  <span>{formatNotificationDate(notification.createdAt)}</span>
+                                  {notification.readAt && <span>Lida em {formatNotificationDate(notification.readAt)}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-6 text-center">
+                            <p className="text-sm font-bold text-white/55">Nenhuma notificação no momento.</p>
+                            <p className="mt-2 text-xs text-white/35">
+                              Os avisos enviados pelo admin aparecerão aqui quando a página for recarregada.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {userRole === "admin" && (
+                        <div className="p-3 border-t border-white/10 bg-white/[0.02]">
+                          <button
+                            type="button"
+                            onClick={openAdminNotificationComposer}
+                            className="w-full h-11 rounded-[12px] bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <Send className="h-4 w-4" />
+                            Nova notificação
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {timeLeft !== null && (
                 <div className={`hidden lg:flex flex-col items-center gap-1.5 px-4 py-2 rounded-md shadow-lg ${
                   currentBrand.id !== "g8"
@@ -603,6 +956,156 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </main>
+
+      {isNotificationComposerOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-[18px] bg-white border border-neutral-100 shadow-2xl overflow-hidden">
+            <div className="p-6 border-b border-neutral-100 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Sininho</p>
+                <h3 className="mt-1 text-2xl font-black text-[#0c0a09] uppercase">Nova notificação</h3>
+                <p className="mt-1 text-sm text-neutral-500 font-medium">
+                  Envie um comunicado geral ou para um agente específico, com a opção de amarrar a um E.C. em questão.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotificationComposerOpen(false)}
+                className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Destinatário</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { value: "all", label: "Todos os agentes" },
+                    { value: "agent", label: "Agente específico" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setNotificationScope(option.value as NotificationScope)}
+                      className={`h-11 rounded-sm border px-4 text-[10px] font-black uppercase tracking-widest transition-all ${
+                        notificationScope === option.value
+                          ? "bg-neutral-900 text-white border-neutral-900"
+                          : "bg-white text-neutral-500 border-neutral-200 hover:border-neutral-300"
+                      }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+                </div>
+              </div>
+
+              {notificationScope === "agent" && (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Agente</label>
+                    <select
+                      value={notificationTargetAgentId}
+                      onChange={(e) => {
+                        setNotificationTargetAgentId(e.target.value);
+                        setNotificationTargetEstablishmentId("");
+                      }}
+                      className="w-full h-12 px-4 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent"
+                      disabled={isNotificationTargetsLoading}
+                    >
+                      <option value="">
+                        {isNotificationTargetsLoading ? "Carregando agentes..." : "Selecione um agente"}
+                      </option>
+                      {adminAgents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.fullName} {agent.cpf ? `• ${agent.cpf}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">E.C. em questão</label>
+                    <select
+                      value={notificationTargetEstablishmentId}
+                      onChange={(e) => setNotificationTargetEstablishmentId(e.target.value)}
+                      className="w-full h-12 px-4 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] focus-visible:outline-none focus-visible:border-brand-accent"
+                      disabled={!notificationTargetAgentId || isNotificationTargetsLoading}
+                    >
+                      <option value="">
+                        {!notificationTargetAgentId
+                          ? "Selecione um agente primeiro"
+                          : isNotificationTargetsLoading
+                            ? "Carregando E.C.s..."
+                            : "Opcional: selecione um E.C."}
+                      </option>
+                      {selectedAgentEstablishments.map((ec) => (
+                        <option key={ec.id} value={ec.id}>
+                          {ec.nomeFantasia} {ec.cnpjCpf ? `• ${ec.cnpjCpf}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-neutral-400 font-medium">
+                      Esse campo é opcional e serve para amarrar o aviso a um E.C. específico do agente escolhido.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Título</label>
+                <input
+                  type="text"
+                  value={notificationTitle}
+                  onChange={(e) => setNotificationTitle(e.target.value)}
+                  placeholder="Ex: Cobrança de meta comercial"
+                  className="w-full h-12 px-4 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] placeholder:text-neutral-400 focus-visible:outline-none focus-visible:border-brand-accent"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Mensagem</label>
+                <textarea
+                  value={notificationMessage}
+                  onChange={(e) => setNotificationMessage(e.target.value)}
+                  placeholder={
+                    notificationScope === "all"
+                      ? "Escreva o comunicado para todos os agentes..."
+                      : notificationScope === "agent"
+                        ? "Escreva o comunicado para este agente..."
+                        : "Escreva o comunicado para este E.C...."
+                  }
+                  className="w-full min-h-[160px] px-4 py-3 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] placeholder:text-neutral-400 focus-visible:outline-none focus-visible:border-brand-accent resize-y"
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => setIsNotificationComposerOpen(false)}
+                  className="h-11 px-5 rounded-sm bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 font-black text-[10px] uppercase tracking-widest"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSendAdminNotification()}
+                  disabled={isSendingNotification}
+                  className="h-11 px-5 rounded-sm bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
+                >
+                  {isSendingNotification ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Enviar notificação
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

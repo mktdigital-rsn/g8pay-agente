@@ -36,7 +36,8 @@ import {
   Cpu,
   Store,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Send,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -382,6 +383,57 @@ export default function CompliancePage() {
       setExportingType(null);
     }
   };
+
+  const openNotificationComposer = (scope: "all" | "establishment") => {
+    setNotificationScope(scope);
+    setNotificationTitle(scope === "all" ? "Comunicado geral" : `Atenção para ${selectedEc?.nomeFantasia || "este E.C."}`);
+    setNotificationMessage("");
+    setIsNotificationComposerOpen(true);
+  };
+
+  const handleSendNotification = async () => {
+    const title = notificationTitle.trim();
+    const message = notificationMessage.trim();
+
+    if (!title || !message) {
+      toast.error("Preencha o título e a mensagem da notificação.");
+      return;
+    }
+
+    if (notificationScope === "establishment" && !selectedEc) {
+      toast.error("Selecione um E.C. para enviar essa notificação.");
+      return;
+    }
+
+    setIsSendingNotification(true);
+    const toastId = toast.loading("Enviando notificação...");
+
+    try {
+      const payload = {
+        title,
+        message,
+        scope: notificationScope,
+        targetEstablishmentId: notificationScope === "establishment" ? selectedEc?.id : undefined,
+        createdByRole: "admin",
+        createdByName: "Compliance Admin",
+      };
+
+      const response = await api.post("/api/notifications", payload);
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível criar a notificação.");
+      }
+
+      toast.success("Notificação enviada com sucesso!", { id: toastId });
+      setIsNotificationComposerOpen(false);
+      setNotificationMessage("");
+    } catch (error: any) {
+      console.error("Error sending notification:", error);
+      toast.error(error.response?.data?.error || error.message || "Não foi possível enviar a notificação.", { id: toastId });
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
   
   // Compliance Review States for Selected E.C.
   const [docReviews, setDocReviews] = useState<Record<string, { status: "approved" | "rejected" | "revisions" | "pending", observations: string }>>({}); 
@@ -393,6 +445,11 @@ export default function CompliancePage() {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNotificationComposerOpen, setIsNotificationComposerOpen] = useState(false);
+  const [notificationScope, setNotificationScope] = useState<"all" | "establishment">("all");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
   const fetchEstablishments = async (overrides?: {
     status?: string;
     search?: string;
@@ -611,6 +668,14 @@ export default function CompliancePage() {
               Responsável: <span className="text-neutral-700 font-black">{agentName || "Sem vínculo"}</span> • CPF: <span className="text-neutral-700 font-black">{maskAgentCpf(agentCpf)}</span>
             </p>
           </div>
+          <Button
+            type="button"
+            onClick={() => openNotificationComposer("establishment")}
+            className="h-11 px-4 rounded-sm bg-[#0c0a09] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center gap-2"
+          >
+            <Send className="h-4 w-4" />
+            Notificar este E.C.
+          </Button>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* Left Column: Register Data, Address & Risk Assessment */}
@@ -1052,6 +1117,93 @@ export default function CompliancePage() {
             </Button>
           </div>
         </Card>
+        {isNotificationComposerOpen && (
+          <div className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl rounded-[18px] bg-white border border-neutral-100 shadow-2xl overflow-hidden">
+              <div className="p-6 border-b border-neutral-100 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Notificações</p>
+                  <h3 className="mt-1 text-2xl font-black text-[#0c0a09] uppercase">
+                    {notificationScope === "all" ? "Comunicado geral" : "Notificar E.C. específico"}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-500 font-medium">
+                    {notificationScope === "all"
+                      ? "A mensagem será entregue para todos os agentes quando eles recarregarem a plataforma."
+                      : `${selectedEc?.nomeFantasia || "---"} • ${agentName || "Agente responsável"}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationComposerOpen(false)}
+                  className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors shrink-0"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Destino</label>
+                    <div className="h-12 px-4 rounded-sm border border-neutral-200 bg-neutral-50 flex items-center text-sm font-black uppercase tracking-widest text-[#0c0a09]">
+                      {notificationScope === "all" ? "Todos os agentes" : "E.C. específico"}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Canal</label>
+                    <div className="h-12 px-4 rounded-sm border border-neutral-200 bg-neutral-50 flex items-center text-sm font-black uppercase tracking-widest text-[#0c0a09]">
+                      Sino da plataforma
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Título</label>
+                  <input
+                    type="text"
+                    value={notificationTitle}
+                    onChange={(e) => setNotificationTitle(e.target.value)}
+                    placeholder="Ex: Ajuste necessário no cadastro"
+                    className="w-full h-12 px-4 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] placeholder:text-neutral-400 focus-visible:outline-none focus-visible:border-brand-accent"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-500">Mensagem</label>
+                  <textarea
+                    value={notificationMessage}
+                    onChange={(e) => setNotificationMessage(e.target.value)}
+                    placeholder="Escreva a orientação, comunicado ou cobrança..."
+                    className="w-full min-h-[160px] px-4 py-3 rounded-sm border border-neutral-200 bg-white text-sm font-medium text-[#0c0a09] placeholder:text-neutral-400 focus-visible:outline-none focus-visible:border-brand-accent resize-y"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2">
+                  <Button
+                    type="button"
+                    onClick={() => setIsNotificationComposerOpen(false)}
+                    className="h-11 px-5 rounded-sm bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 font-black text-[10px] uppercase tracking-widest"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleSendNotification()}
+                    disabled={isSendingNotification}
+                    className="h-11 px-5 rounded-sm bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
+                  >
+                    {isSendingNotification ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Enviar notificação
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Fullscreen Preview Modal */}
         {isModalOpen && activePreviewDoc && previewBlobUrl && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
