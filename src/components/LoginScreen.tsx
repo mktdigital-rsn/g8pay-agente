@@ -3,16 +3,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { QRCodeSVG } from "qrcode.react";
 import {
   User,
   ArrowRight,
   ShieldCheck,
   ChevronLeft,
-  Smartphone,
-  RefreshCcw,
-  AlertCircle,
-  CheckCircle2,
   Loader2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -23,32 +18,25 @@ import api from "@/lib/api";
 import { toast } from "sonner";
 import { currentBrand } from "@/config/brand";
 
-type LoginStep = "identifier" | "password" | "forgot_password" | "reset_password";
-type ChallengeStatus = "PENDING" | "APPROVED" | "EXPIRED";
-
-type ChallengeResponse = {
-  success: boolean;
-  data: {
-    token: string;
-    qrcode: string;
-    status: ChallengeStatus;
-    expiresAt: string;
-  };
-  message: string | null;
-};
-
-type ChallengeStatusResponse = {
-  success: boolean;
-  data: {
-    status: ChallengeStatus;
-    expiresAt: string;
-  };
-  message: string | null;
-};
+type LoginStep = "identifier" | "password" | "challenge" | "forgot_password" | "reset_password";
 
 type LoginResponse = {
+  success?: boolean;
+  error?: string;
   accessToken?: string;
   userToken?: string;
+  agent?: {
+    id: string;
+    fullName: string;
+    email: string;
+    cpf: string;
+    whatsapp?: string;
+    role?: string;
+  };
+  challengeId?: string;
+  challengeExpiresAt?: string;
+  email?: string;
+  requiresChallenge?: boolean;
 };
 
 interface LoginScreenProps {
@@ -62,14 +50,11 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const [identifier, setIdentifier] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [password, setPassword] = useState("");
-  const [challengeToken, setChallengeToken] = useState("");
-  const [challengeQrCode, setChallengeQrCode] = useState("");
-  const [challengeStatus, setChallengeStatus] = useState<ChallengeStatus>("PENDING");
+  const [loginChallengeId, setLoginChallengeId] = useState("");
+  const [loginChallengeEmail, setLoginChallengeEmail] = useState("");
   const [challengeExpiresAt, setChallengeExpiresAt] = useState("");
-  const [isPolling, setIsPolling] = useState(false);
-  const [hasFinalized, setHasFinalized] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const pollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [challengeDigits, setChallengeDigits] = useState(["", "", "", "", "", ""]);
+  const challengeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   // Password Recovery States
   const [forgotCpf, setForgotCpf] = useState("");
@@ -78,31 +63,87 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
 
-  useEffect(() => {
-    if (challengeStatus === "APPROVED") {
-      setProgress(0);
-      const duration = 15000; // 15 seconds
-      const intervalTime = 100; // every 100ms
-      const stepVal = 100 / (duration / intervalTime);
-
-      const timer = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(timer);
-            return 100;
-          }
-          return Math.min(prev + stepVal, 100);
-        });
-      }, intervalTime);
-
-      return () => clearInterval(timer);
-    }
-  }, [challengeStatus]);
-
   const cleanIdentifier = useMemo(() => {
     const isEmail = identifier.includes("@");
     return isEmail ? identifier.trim().toLowerCase() : identifier.replace(/\D/g, "");
   }, [identifier]);
+
+  const challengeCode = useMemo(() => challengeDigits.join(""), [challengeDigits]);
+  const formattedChallengeExpiresAt = useMemo(() => {
+    if (!challengeExpiresAt) return "";
+
+    const parsedDate = new Date(challengeExpiresAt);
+    if (Number.isNaN(parsedDate.getTime())) return challengeExpiresAt;
+
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(parsedDate);
+  }, [challengeExpiresAt]);
+
+  const resetLoginChallenge = () => {
+    setLoginChallengeId("");
+    setLoginChallengeEmail("");
+    setChallengeExpiresAt("");
+    setChallengeDigits(["", "", "", "", "", ""]);
+  };
+
+  const finalizeSuccessfulLogin = async (agent: {
+    id: string;
+    fullName: string;
+    email: string;
+    cpf: string;
+    whatsapp?: string;
+    role?: string;
+  }, accessToken: string, userToken: string) => {
+    localStorage.setItem("token", accessToken || "bypass-token");
+    localStorage.setItem("userToken", userToken || "bypass-user-token");
+    localStorage.setItem("agentId", agent.id);
+    localStorage.setItem("userName", agent.fullName);
+    localStorage.setItem("userEmail", agent.email);
+    localStorage.setItem("userCpf", agent.cpf);
+    localStorage.setItem("userWhatsapp", agent.whatsapp || "");
+    localStorage.setItem("userRole", agent.role || "agent");
+
+    try {
+      const contractRes = await api.get(`/api/contracts?agentId=${agent.id}`);
+      if (contractRes.data && contractRes.data.success && contractRes.data.data.length > 0) {
+        const apiContract = contractRes.data.data[0];
+        const contractData = {
+          agentId: agent.id,
+          fullName: agent.fullName,
+          cpf: agent.cpf,
+          email: agent.email,
+          whatsapp: agent.whatsapp,
+          date: new Date(apiContract.createdAt).toLocaleDateString("pt-BR"),
+          pdfPreviewUrl: `${api.defaults.baseURL}/api/contracts/${apiContract.id}/download`,
+          signatureLink: apiContract.signatureLink,
+          isMock: !apiContract.signatureLink?.includes("d4sign")
+        };
+        localStorage.setItem("signedContract", JSON.stringify(contractData));
+      } else {
+        const contractData = {
+          agentId: agent.id,
+          fullName: agent.fullName,
+          cpf: agent.cpf,
+          email: agent.email,
+          whatsapp: agent.whatsapp,
+          date: new Date().toLocaleDateString("pt-BR")
+        };
+        localStorage.setItem("signedContract", JSON.stringify(contractData));
+      }
+    } catch (cErr) {
+      console.warn("Could not load signed contract on login:", cErr);
+    }
+
+    localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
+
+    toast.success(`Bem-vindo de volta, ${agent.fullName}! Redirecionando...`);
+
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 800);
+  };
 
   const handleIdentifierSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,62 +166,24 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
         password: password,
       };
 
-      const response = await api.post("/api/agents/login", payload);
+      const response = await api.post<LoginResponse>("/api/agents/login", payload);
 
-      if (response.data && response.data.success) {
-        const { accessToken, userToken, agent } = response.data;
-        
-        localStorage.setItem("token", accessToken || "bypass-token");
-        localStorage.setItem("userToken", userToken || "bypass-user-token");
-        localStorage.setItem("agentId", agent.id);
-        localStorage.setItem("userName", agent.fullName);
-        localStorage.setItem("userEmail", agent.email);
-        localStorage.setItem("userCpf", agent.cpf);
-        localStorage.setItem("userWhatsapp", agent.whatsapp);
-        localStorage.setItem("userRole", agent.role || "agent");
-
-        // Try getting contract from API to update local signedContract
-        try {
-          const contractRes = await api.get(`/api/contracts?agentId=${agent.id}`);
-          if (contractRes.data && contractRes.data.success && contractRes.data.data.length > 0) {
-            const apiContract = contractRes.data.data[0];
-            const contractData = {
-              agentId: agent.id,
-              fullName: agent.fullName,
-              cpf: agent.cpf,
-              email: agent.email,
-              whatsapp: agent.whatsapp,
-              date: new Date(apiContract.createdAt).toLocaleDateString("pt-BR"),
-              pdfPreviewUrl: `${api.defaults.baseURL}/api/contracts/${apiContract.id}/download`,
-              signatureLink: apiContract.signatureLink,
-              isMock: !apiContract.signatureLink?.includes("d4sign")
-            };
-            localStorage.setItem("signedContract", JSON.stringify(contractData));
-          } else {
-            // Fallback metadata
-            const contractData = {
-              agentId: agent.id,
-              fullName: agent.fullName,
-              cpf: agent.cpf,
-              email: agent.email,
-              whatsapp: agent.whatsapp,
-              date: new Date().toLocaleDateString("pt-BR")
-            };
-            localStorage.setItem("signedContract", JSON.stringify(contractData));
-          }
-        } catch (cErr) {
-          console.warn("Could not load signed contract on login:", cErr);
-        }
-        
-        // Set session expiration to 15 mins from now
-        localStorage.setItem("sessionExpiresAt", (Date.now() + 900 * 1000).toString());
-
-        toast.success(`Bem-vindo de volta, ${agent.fullName}! Redirecionando...`);
-
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 800);
+      if (response.data && response.data.success && response.data.requiresChallenge) {
+        setLoginChallengeId(response.data.challengeId || "");
+        setLoginChallengeEmail(response.data.email || "");
+        setChallengeExpiresAt(response.data.challengeExpiresAt || "");
+        setChallengeDigits(["", "", "", "", "", ""]);
+        setStep("challenge");
+        toast.success("Código enviado para o seu e-mail cadastrado.");
+        return;
       }
+
+      if (response.data && response.data.success && response.data.agent && response.data.accessToken && response.data.userToken) {
+        await finalizeSuccessfulLogin(response.data.agent, response.data.accessToken, response.data.userToken);
+        return;
+      }
+
+      throw new Error(response.data?.error || "Resposta inválida do servidor.");
     } catch (err: any) {
       console.error("Login error:", err);
       const message =
@@ -195,8 +198,78 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
 
   const handleRestartFlow = () => {
     setPassword("");
+    resetLoginChallenge();
     setStep("identifier");
     setIsLoading(false);
+  };
+
+  const handleChallengeDigitChange = (index: number, rawValue: string) => {
+    const digits = rawValue.replace(/\D/g, "");
+    const nextValue = digits.slice(-1);
+    setChallengeDigits((prev) => {
+      const next = [...prev];
+      next[index] = nextValue;
+      return next;
+    });
+
+    if (nextValue && index < challengeInputRefs.current.length - 1) {
+      challengeInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleChallengeKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace" && !challengeDigits[index] && index > 0) {
+      challengeInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleChallengePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    event.preventDefault();
+    const nextDigits = Array.from({ length: 6 }, (_, index) => pasted[index] || "");
+    setChallengeDigits(nextDigits);
+    const lastFilledIndex = Math.min(pasted.length, 6) - 1;
+    if (lastFilledIndex >= 0) {
+      challengeInputRefs.current[lastFilledIndex]?.focus();
+    }
+  };
+
+  const handleChallengeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!loginChallengeId) {
+      toast.error("Seu desafio de acesso expirou. Faça login novamente.");
+      setStep("password");
+      return;
+    }
+
+    if (challengeCode.length !== 6) {
+      toast.error("Informe os 6 dígitos do código enviado por e-mail.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await api.post("/api/agents/login/verify", {
+        challengeId: loginChallengeId,
+        code: challengeCode,
+      });
+
+      if (response.data?.success && response.data.agent && response.data.accessToken && response.data.userToken) {
+        await finalizeSuccessfulLogin(response.data.agent, response.data.accessToken, response.data.userToken);
+        return;
+      }
+
+      throw new Error(response.data?.error || "Não foi possível validar o código.");
+    } catch (err: any) {
+      console.error("Challenge verification error:", err);
+      toast.error(err.response?.data?.error || err.message || "Não foi possível validar o código.");
+      setChallengeDigits(["", "", "", "", "", ""]);
+      challengeInputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleForgotCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,31 +361,10 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   };
 
   useEffect(() => {
-    return () => {
-      if (pollingTimerRef.current) {
-        clearTimeout(pollingTimerRef.current);
-      }
-    };
-  }, []);
-
-  const statusLabel =
-    challengeStatus === "APPROVED"
-      ? "Desafio aprovado"
-      : challengeStatus === "EXPIRED"
-        ? "Desafio expirado"
-        : "Aguardando aprovação no app";
-
-  const formattedExpiresAt = useMemo(() => {
-    if (!challengeExpiresAt) return "";
-
-    const parsedDate = new Date(challengeExpiresAt);
-    if (Number.isNaN(parsedDate.getTime())) return challengeExpiresAt;
-
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    }).format(parsedDate);
-  }, [challengeExpiresAt]);
+    if (step === "challenge") {
+      challengeInputRefs.current[0]?.focus();
+    }
+  }, [step]);
 
   return (
     <div className={`min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#0c0a09] ${currentBrand.themeClass}`}>
@@ -508,7 +560,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
               >
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={() => setStep("identifier")}
+                  onClick={handleRestartFlow}
                     className="p-2 hover:bg-white/5 rounded-full transition-colors"
                     type="button"
                   >
@@ -561,6 +613,97 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                       </span>
                     ) : (
                       "ENTRAR E ACESSAR"
+                    )}
+                  </Button>
+                </form>
+              </motion.div>
+            )}
+
+            {step === "challenge" && (
+              <motion.div
+                key="step-challenge"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-10 2xl:space-y-16 mt-12 lg:mt-0"
+              >
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => {
+                      setStep("password");
+                      resetLoginChallenge();
+                    }}
+                    className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer"
+                    type="button"
+                  >
+                    <ChevronLeft className="h-6 w-6 text-white/50" />
+                  </button>
+                  <div>
+                    <h2 className="text-2xl font-black text-white">Autenticação por PIN</h2>
+                    <p className="text-white/40 text-sm font-medium">
+                      {loginChallengeEmail ? `Enviamos o código para ${loginChallengeEmail}` : "Confira o código enviado ao seu e-mail"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-[2px] border border-white/5 bg-white/[0.02] p-4 text-sm text-white/70">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-brand-accent">
+                      Código de 6 dígitos
+                    </span>
+                    {formattedChallengeExpiresAt && (
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white/35">
+                        Expira em {formattedChallengeExpiresAt}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 leading-relaxed">
+                    Digite o código numérico de 6 dígitos para concluir seu acesso. Se não encontrar o e-mail, verifique a caixa de spam.
+                  </p>
+                </div>
+
+                <form onSubmit={handleChallengeSubmit} className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">
+                      PIN de Acesso
+                    </label>
+                    <div className="flex items-center gap-2 sm:gap-3" onPaste={handleChallengePaste}>
+                      {challengeDigits.map((digit, index) => (
+                        <Input
+                          key={index}
+                          ref={(el) => {
+                            challengeInputRefs.current[index] = el;
+                          }}
+                          value={digit}
+                          onChange={(e) => handleChallengeDigitChange(index, e.target.value)}
+                          onKeyDown={(e) => handleChallengeKeyDown(index, e)}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={1}
+                          autoComplete="one-time-code"
+                          aria-label={`Dígito ${index + 1}`}
+                          className="h-16 w-12 sm:w-14 text-center bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-black text-2xl rounded-[2px] p-0"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className={`w-full h-16 text-lg font-black text-white rounded-[2px] shadow-lg cursor-pointer transition-all ${
+                      currentBrand.id === "galapagos"
+                        ? "bg-blue-500 hover:bg-blue-400"
+                        : "bg-brand-accent hover:bg-brand-accent-hover"
+                    }`}
+                    disabled={isLoading || challengeCode.length !== 6}
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2 justify-center w-full">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Validando...
+                      </span>
+                    ) : (
+                      "CONFIRMAR CÓDIGO"
                     )}
                   </Button>
                 </form>
