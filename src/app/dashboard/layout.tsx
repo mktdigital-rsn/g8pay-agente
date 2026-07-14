@@ -2,6 +2,7 @@
 
 import React from "react";
 import Image from "next/image";
+import { motion } from "framer-motion";
 import {
   Home,
   Wallet,
@@ -149,10 +150,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isNotificationTargetsLoading, setIsNotificationTargetsLoading] = React.useState(false);
   const [isSendingNotification, setIsSendingNotification] = React.useState(false);
   const notificationsPanelRef = React.useRef<HTMLDivElement | null>(null);
+  const previousUnreadCountRef = React.useRef(0);
   const selectedAgentEstablishments = React.useMemo(() => {
     if (!notificationTargetAgentId) return [];
     return adminEstablishments.filter((ec) => ec.agentId === notificationTargetAgentId);
   }, [adminEstablishments, notificationTargetAgentId]);
+  const unreadNotificationsCount = React.useMemo(
+    () => notifications.filter((notification) => !notification.isRead).length,
+    [notifications]
+  );
 
    React.useEffect(() => {
      const activeGroups = userRole === "admin" ? adminMenuGroups : menuGroups;
@@ -407,6 +413,46 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!agentId) return;
     void loadNotifications(agentId);
   }, [agentId, loadNotifications, pathname]);
+
+  React.useEffect(() => {
+    if (!agentId) return;
+
+    const previousUnreadCount = previousUnreadCountRef.current;
+    previousUnreadCountRef.current = unreadNotificationsCount;
+
+    if (unreadNotificationsCount <= 0 || unreadNotificationsCount === previousUnreadCount) {
+      return;
+    }
+
+    const audioContext = typeof window !== "undefined"
+      ? new (window.AudioContext || (window as any).webkitAudioContext)()
+      : null;
+
+    if (!audioContext) return;
+
+    const playTone = (frequency: number, startTime: number, duration: number, gainValue: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = gainValue;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+
+    const startAt = audioContext.currentTime + 0.01;
+    playTone(880, startAt, 0.12, 0.04);
+    playTone(988, startAt + 0.12, 0.14, 0.035);
+
+    return () => {
+      audioContext.close().catch(() => undefined);
+    };
+  }, [agentId, unreadNotificationsCount]);
 
   React.useEffect(() => {
     if (!isNotificationsOpen || !agentId) return;
@@ -817,12 +863,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className="relative flex h-11 w-11 items-center justify-center rounded-md border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10 hover:text-brand-accent"
                     aria-label="Abrir notificações"
                   >
-                    <Bell className="h-4.5 w-4.5" />
-                    {notifications.some(notification => !notification.isRead) && (
+                    <motion.span
+                      animate={
+                        unreadNotificationsCount > 0
+                          ? { rotate: [0, -12, 12, -8, 8, 0], y: [0, -1, 0, -1, 0] }
+                          : { rotate: 0, y: 0 }
+                      }
+                      transition={
+                        unreadNotificationsCount > 0
+                          ? { duration: 1.15, repeat: Infinity, repeatDelay: 2.5, ease: "easeInOut" }
+                          : { duration: 0.2 }
+                      }
+                      className="block"
+                    >
+                      <Bell className="h-4.5 w-4.5" />
+                    </motion.span>
+                    {unreadNotificationsCount > 0 && (
                       <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-brand-accent text-white text-[9px] font-black leading-none flex items-center justify-center">
-                        {notifications.filter(notification => !notification.isRead).length > 9
+                        {unreadNotificationsCount > 9
                           ? "9+"
-                          : notifications.filter(notification => !notification.isRead).length}
+                          : unreadNotificationsCount}
                       </span>
                     )}
                   </button>
@@ -835,7 +895,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           <h3 className="text-sm font-black text-white uppercase tracking-wide">Notificações</h3>
                         </div>
                         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/40">
-                          {notifications.filter(notification => !notification.isRead).length} novas
+                          {unreadNotificationsCount} novas
                         </span>
                       </div>
 

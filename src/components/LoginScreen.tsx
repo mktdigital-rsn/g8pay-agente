@@ -272,8 +272,15 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
     }
   };
 
-  const handleForgotCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleForgotIdentifierChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
+    const normalized = raw.trim().toLowerCase();
+
+    if (/[a-z@]/i.test(raw)) {
+      setForgotCpf(normalized);
+      return;
+    }
+
     const v = raw.replace(/\D/g, "");
     let masked = "";
     if (v.length <= 11) {
@@ -296,14 +303,13 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotCpf) {
-      toast.error("Por favor, informe seu CPF ou CNPJ.");
+      toast.error("Por favor, informe seu CPF/CNPJ ou e-mail.");
       return;
     }
 
     setIsLoading(true);
     try {
-      const cleanCpf = forgotCpf.replace(/\D/g, "");
-      const response = await api.post("/api/agents/forgot-password", { cpf: cleanCpf });
+      const response = await api.post("/api/agents/forgot-password", { cpf: forgotCpf.trim() });
       
       if (response.data && response.data.success) {
         setMaskedEmail(response.data.email);
@@ -337,9 +343,8 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
 
     setIsLoading(true);
     try {
-      const cleanCpf = forgotCpf.replace(/\D/g, "");
       const response = await api.post("/api/agents/reset-password", {
-        cpf: cleanCpf,
+        cpf: forgotCpf.trim(),
         code: recoveryCode,
         newPassword: newPassword,
       });
@@ -728,18 +733,18 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                   </button>
                   <div>
                     <h2 className="text-2xl font-black text-white">Recuperar Senha</h2>
-                    <p className="text-white/40 text-sm font-medium">Informe seu CPF/CNPJ para iniciar</p>
+                    <p className="text-white/40 text-sm font-medium">Informe seu CPF/CNPJ ou e-mail para iniciar</p>
                   </div>
                 </div>
 
                 <form onSubmit={handleForgotSubmit} className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">CPF / CNPJ</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-brand-accent ml-1">CPF / CNPJ ou E-mail</label>
                     <Input
-                      placeholder="000.000.000-00 ou 00.000.000/0000-00"
-                      className="h-16 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold text-lg rounded-[2px]"
+                      placeholder="CPF/CNPJ ou e-mail"
+                      className="h-16 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold text-lg rounded-[2px] placeholder:text-sm placeholder:font-semibold placeholder:text-white/25"
                       value={forgotCpf}
-                      onChange={handleForgotCpfChange}
+                      onChange={handleForgotIdentifierChange}
                       autoFocus
                     />
                   </div>
