@@ -1124,7 +1124,7 @@ export default function MaquininhasPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <DocumentUploadCard
                 title="Contrato Assinado"
                 desc={`Documento que formaliza a parceria com a ${currentBrand.id === "g8" ? "G8 Pay" : currentBrand.name}`}
@@ -1536,66 +1536,59 @@ function DocumentUploadCard({
   onRemove: (index: number) => void;
 }) {
   return (
-    <Card className={`p-8 group hover:border-[var(--brand-accent)]/50 transition-all duration-300 rounded-[2px] ${attached ? 'bg-green-50/10 border-green-200' : 'bg-white'}`}>
-      <div className="flex flex-col md:flex-row items-start gap-8">
-        <div className="flex-1 space-y-4 text-center md:text-left">
-          <div className="flex items-center gap-3 justify-center md:justify-start">
-            <div className={`w-10 h-10 rounded-[2px] flex items-center justify-center shrink-0 ${attached ? 'bg-green-500 text-white' : 'bg-orange-50 text-[var(--brand-accent)]'}`}>
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">{title}</h4>
-              <p className="text-[10px] font-bold text-neutral-400 leading-tight uppercase tracking-widest">{desc}</p>
-            </div>
-          </div>
-
-          {files.length > 0 && (
-            <div className="grid grid-cols-1 gap-2 mt-4">
-              {files.map((file, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-white border border-neutral-100 rounded-sm shadow-sm animate-in fade-in slide-in-from-left-2 transition-all">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 bg-green-50 rounded-sm flex items-center justify-center text-green-600 shrink-0">
-                      <CheckCircle2 className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-black text-[#0c0a09] truncate uppercase">{file.name}</p>
-                      <button
-                        onClick={() => window.open(file.url, '_blank')}
-                        className="text-[9px] font-black text-[var(--brand-accent)] uppercase hover:underline"
-                      >
-                        Visualizar Arquivo
-                      </button>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemove(idx)}
-                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+    <Card className={`p-6 group hover:border-[var(--brand-accent)]/50 transition-all duration-300 rounded-[2px] h-full flex flex-col gap-4 ${attached ? 'bg-green-50/10 border-green-200' : 'bg-white'}`}>
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-[2px] flex items-center justify-center shrink-0 ${attached ? 'bg-green-500 text-white' : 'bg-orange-50 text-[var(--brand-accent)]'}`}>
+          <FileText className="h-5 w-5" />
         </div>
-
-        <div className="w-full md:w-64 shrink-0">
-          <label className={`flex flex-col items-center justify-center h-40 w-full border-2 border-dashed rounded-[2px] cursor-pointer transition-all ${attached ? 'border-green-300 bg-green-50/30' : 'border-neutral-200 hover:bg-neutral-50 group-hover:border-[var(--brand-accent)]/30 bg-white'}`}>
-            <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
-              <div className={`w-12 h-12 rounded-full mb-3 flex items-center justify-center transition-all ${attached ? 'bg-green-100 text-green-600' : 'bg-neutral-100 text-neutral-400 group-hover:bg-[var(--brand-accent)]/10 group-hover:text-[var(--brand-accent)]'}`}>
-                <FileUp className="h-6 w-6" />
-              </div>
-              <p className={`text-[10px] font-black uppercase tracking-widest ${attached ? 'text-green-600' : 'text-neutral-500 group-hover:text-[var(--brand-accent)]'}`}>
-                {attached ? 'Adicionar mais' : 'Clique para enviar'}
-              </p>
-              <p className="text-[8px] font-bold text-neutral-300 uppercase mt-1">PDF, JPG, JPEG ou PNG</p>
-            </div>
-            <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
-          </label>
+        <div className="min-w-0">
+          <h4 className="text-sm font-black text-[#0c0a09] uppercase tracking-[0.1em]">{title}</h4>
+          <p className="text-[10px] font-bold text-neutral-400 leading-tight uppercase tracking-widest">{desc}</p>
         </div>
       </div>
+
+      <div className="flex-1">
+        {files.length > 0 ? (
+          <div className="space-y-2">
+            {files.map((file, idx) => (
+              <div key={idx} className="flex items-center justify-between p-3 bg-white border border-neutral-100 rounded-sm shadow-sm animate-in fade-in slide-in-from-left-2 transition-all">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 bg-green-50 rounded-sm flex items-center justify-center text-green-600 shrink-0">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-[#0c0a09] truncate uppercase">{file.name}</p>
+                    <button
+                      onClick={() => window.open(file.url, '_blank')}
+                      className="text-[9px] font-black text-[var(--brand-accent)] uppercase hover:underline"
+                    >
+                      Visualizar Arquivo
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(idx)}
+                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Nenhum arquivo selecionado ainda.</p>
+        )}
+      </div>
+
+      <label className={`flex items-center justify-center gap-2 h-12 w-full border-2 border-dashed rounded-[2px] cursor-pointer transition-all ${attached ? 'border-green-300 bg-green-50/30 text-green-600' : 'border-neutral-200 hover:bg-neutral-50 group-hover:border-[var(--brand-accent)]/30 bg-white text-neutral-500 group-hover:text-[var(--brand-accent)]'}`}>
+        <FileUp className="h-4 w-4" />
+        <span className="text-[10px] font-black uppercase tracking-widest">
+          {attached ? 'Adicionar mais' : 'Selecionar arquivo'}
+        </span>
+        <input type="file" className="hidden" onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])} />
+      </label>
     </Card>
   );
 }
