@@ -155,6 +155,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!notificationTargetAgentId) return [];
     return adminEstablishments.filter((ec) => ec.agentId === notificationTargetAgentId);
   }, [adminEstablishments, notificationTargetAgentId]);
+  const isPathActive = React.useCallback((href: string) => {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }, [pathname]);
+  const isExactPathActive = React.useCallback((href: string) => pathname === href, [pathname]);
   const unreadNotificationsCount = React.useMemo(
     () => notifications.filter((notification) => !notification.isRead).length,
     [notifications]
@@ -163,16 +167,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
    React.useEffect(() => {
      const activeGroups = userRole === "admin" ? adminMenuGroups : menuGroups;
      activeGroups.forEach(group => {
-       group.items.forEach(item => {
-         if (item.submenu) {
-           const isAnySubActive = item.submenu.some(sub => pathname.startsWith(sub.href));
-           if (isAnySubActive) {
-             setExpandedMenus(prev => ({ ...prev, [item.label]: true }));
-           }
-         }
-       });
-     });
-   }, [pathname, userRole]);
+      group.items.forEach(item => {
+        if (item.submenu) {
+          const isAnySubActive = item.submenu.some(sub => isExactPathActive(sub.href));
+          if (isAnySubActive) {
+            setExpandedMenus(prev => ({ ...prev, [item.label]: true }));
+          }
+        }
+      });
+    });
+  }, [isExactPathActive, pathname, userRole]);
    const setGlobalBalance = useSetAtom(balanceAtom);
    const setGlobalBalanceLoading = useSetAtom(isBalanceLoadingAtom);
    const [user, setUser] = useAtom(userAtom);
@@ -699,10 +703,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {(userRole === "admin" ? adminMenuGroups : menuGroups).map((group, groupIdx) => (
               <div key={groupIdx} className="space-y-1">
                 {group.items.map((item) => {
-                  const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(item.href);
+                  const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : isPathActive(item.href);
                   
                   if (item.submenu) {
-                    const isAnySubActive = item.submenu.some(sub => pathname.startsWith(sub.href));
                     return (
                       <div key={item.label} className="space-y-1">
                         <button
@@ -726,7 +729,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {expandedMenus[item.label] && (
                           <div className="pl-6 space-y-1 animate-in slide-in-from-top-1 duration-200">
                             {item.submenu.map((sub) => {
-                              const isSubActive = pathname.startsWith(sub.href);
+                              const isSubActive = isExactPathActive(sub.href);
                               return (
                                 <Link
                                   key={sub.label}

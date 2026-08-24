@@ -13,11 +13,13 @@ import {
   Clock,
   Download,
   ExternalLink,
+  Edit2,
   Filter,
   Mail,
   MapPin,
   Phone,
   RefreshCcw,
+  Loader2,
   Search,
   Shield,
   Store,
@@ -32,6 +34,20 @@ type AgentCrmRecord = {
   email?: string;
   whatsapp?: string;
   status?: string;
+  birthDate?: string;
+  cep?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  bankNumber?: string;
+  accountBranch?: string;
+  accountNumber?: string;
+  hasReferral?: boolean;
+  referrerName?: string;
+  referrerCpf?: string;
   contractStatus: "signed" | "pending";
   contractTitle?: string | null;
   contractSignedAt?: string | null;
@@ -39,8 +55,6 @@ type AgentCrmRecord = {
   approvedEstablishments: number;
   pendingEstablishments: number;
   rejectedEstablishments: number;
-  city?: string;
-  state?: string;
   latestEstablishmentName?: string;
   latestEstablishmentStatus?: string;
   latestActivityAt?: string;
@@ -71,6 +85,28 @@ type EstablishmentRecord = {
   state?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+type AgentEditForm = {
+  fullName: string;
+  cpf: string;
+  email: string;
+  whatsapp: string;
+  birthDate: string;
+  status: string;
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  bankNumber: string;
+  accountBranch: string;
+  accountNumber: string;
+  hasReferral: string;
+  referrerName: string;
+  referrerCpf: string;
 };
 
 function normalizeText(value?: string | null) {
@@ -119,6 +155,73 @@ function csvEscape(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+function formatDateForDisplay(value?: string | null) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat("pt-BR").format(parsed);
+}
+
+function normalizeDateForApi(value?: string | null) {
+  if (!value) return "";
+
+  const trimmed = value.trim();
+  const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) {
+    const [, day, month, year] = brMatch;
+    return `${year}-${month}-${day}`;
+  }
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return trimmed;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return trimmed;
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function translateAgentStatus(value?: string | null) {
+  const normalized = (value || "").trim().toLowerCase();
+  const map: Record<string, string> = {
+    pending: "Pendente",
+    active: "Ativo",
+    inactive: "Inativo",
+    suspended: "Suspenso",
+    approved: "Aprovado",
+    rejected: "Reprovado",
+  };
+
+  return map[normalized] || value || "---";
+}
+
+function buildAgentEditForm(agent: Partial<AgentCrmRecord>): AgentEditForm {
+  return {
+    fullName: agent.fullName || "",
+    cpf: agent.cpf || "",
+    email: agent.email || "",
+    whatsapp: agent.whatsapp || "",
+    birthDate: formatDateForDisplay(agent.birthDate),
+    status: agent.status || "",
+    cep: "",
+    street: "",
+    number: "",
+    complement: "",
+    neighborhood: "",
+    city: "",
+    state: "",
+    bankNumber: "",
+    accountBranch: "",
+    accountNumber: "",
+    hasReferral: "",
+    referrerName: "",
+    referrerCpf: "",
+  };
+}
+
 function AgentMetric({
   label,
   value,
@@ -163,6 +266,11 @@ export default function ComplianceAgentsPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [exporting, setExporting] = useState(false);
   const [isEstablishmentsModalOpen, setIsEstablishmentsModalOpen] = useState(false);
+  const [isAgentEditModalOpen, setIsAgentEditModalOpen] = useState(false);
+  const [isAgentEditLoading, setIsAgentEditLoading] = useState(false);
+  const [isSavingAgentEdit, setIsSavingAgentEdit] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentCrmRecord | null>(null);
+  const [agentEditForm, setAgentEditForm] = useState<AgentEditForm | null>(null);
 
   const normalizeApiAgent = (raw: Record<string, unknown>): AgentCrmRecord => ({
     agentId: String(raw.agentId || raw.id || ""),
@@ -170,7 +278,19 @@ export default function ComplianceAgentsPage() {
     cpf: String(raw.cpf || raw.agentCpf || "---"),
     email: String(raw.email || ""),
     whatsapp: String(raw.whatsapp || ""),
+    birthDate: raw.birthDate ? String(raw.birthDate) : undefined,
+    cep: raw.cep ? String(raw.cep) : undefined,
+    street: raw.street ? String(raw.street) : undefined,
+    number: raw.number ? String(raw.number) : undefined,
+    complement: raw.complement ? String(raw.complement) : undefined,
+    neighborhood: raw.neighborhood ? String(raw.neighborhood) : undefined,
     status: String(raw.status || (raw.contractStatus === "signed" ? "active" : "pending")),
+    bankNumber: raw.bankNumber ? String(raw.bankNumber) : undefined,
+    accountBranch: raw.accountBranch ? String(raw.accountBranch) : undefined,
+    accountNumber: raw.accountNumber ? String(raw.accountNumber) : undefined,
+    hasReferral: typeof raw.hasReferral === "boolean" ? raw.hasReferral : undefined,
+    referrerName: raw.referrerName ? String(raw.referrerName) : undefined,
+    referrerCpf: raw.referrerCpf ? String(raw.referrerCpf) : undefined,
     contractStatus: raw.contractStatus === "signed" ? "signed" : "pending",
     contractTitle: raw.contractTitle ? String(raw.contractTitle) : raw.title ? String(raw.title) : null,
     contractSignedAt: raw.contractSignedAt ? String(raw.contractSignedAt) : raw.signedAt ? String(raw.signedAt) : null,
@@ -339,6 +459,86 @@ export default function ComplianceAgentsPage() {
   }, [filteredAgents, selectedAgentId]);
 
   const selectedAgent = filteredAgents.find((agent) => agent.agentId === selectedAgentId) || filteredAgents[0] || null;
+
+  const closeAgentEditModal = useCallback(() => {
+    setIsAgentEditModalOpen(false);
+    setIsAgentEditLoading(false);
+    setIsSavingAgentEdit(false);
+    setEditingAgent(null);
+    setAgentEditForm(null);
+  }, []);
+
+  const openAgentEditModal = useCallback(async (agentId: string) => {
+    const fallbackAgent = agents.find((agent) => agent.agentId === agentId) || null;
+    setEditingAgent(fallbackAgent);
+    setAgentEditForm(buildAgentEditForm(fallbackAgent || {}));
+    setIsAgentEditModalOpen(true);
+    setIsAgentEditLoading(true);
+
+    try {
+      const response = await api.get(`/api/agents/${agentId}`);
+      const payload = response.data?.data || response.data?.agent || null;
+      if (payload) {
+        const normalized = normalizeApiAgent(payload);
+        setEditingAgent(normalized);
+        setAgentEditForm(buildAgentEditForm(normalized));
+      }
+    } catch (err) {
+      console.warn("Não foi possível carregar o agente para edição:", err);
+      toast.error("Não foi possível carregar os dados completos do agente.");
+    } finally {
+      setIsAgentEditLoading(false);
+    }
+  }, [agents]);
+
+  const updateAgentEditField = useCallback(<K extends keyof AgentEditForm>(field: K, value: AgentEditForm[K]) => {
+    setAgentEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  }, []);
+
+  const handleSaveAgentEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingAgent || !agentEditForm) return;
+
+    setIsSavingAgentEdit(true);
+    const toastId = toast.loading("Salvando agente...");
+
+    try {
+      const response = await api.patch(`/api/agents/${editingAgent.agentId}`, {
+        fullName: agentEditForm.fullName,
+        cpf: agentEditForm.cpf,
+        email: agentEditForm.email,
+        whatsapp: agentEditForm.whatsapp,
+        birthDate: normalizeDateForApi(agentEditForm.birthDate) || undefined,
+        status: agentEditForm.status,
+        cep: agentEditForm.cep,
+        street: agentEditForm.street,
+        number: agentEditForm.number,
+        complement: agentEditForm.complement || undefined,
+        neighborhood: agentEditForm.neighborhood,
+        city: agentEditForm.city,
+        state: agentEditForm.state,
+        bankNumber: agentEditForm.bankNumber || undefined,
+        accountBranch: agentEditForm.accountBranch || undefined,
+        accountNumber: agentEditForm.accountNumber || undefined,
+        hasReferral: agentEditForm.hasReferral === "true",
+        referrerName: agentEditForm.referrerName || undefined,
+        referrerCpf: agentEditForm.referrerCpf || undefined,
+      });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível salvar o agente.");
+      }
+
+      toast.success("Agente atualizado com sucesso.", { id: toastId });
+      closeAgentEditModal();
+      await loadAgents();
+    } catch (err: any) {
+      console.error("Erro ao salvar agente:", err);
+      toast.error(err.response?.data?.error || err.message || "Não foi possível salvar as alterações.", { id: toastId });
+    } finally {
+      setIsSavingAgentEdit(false);
+    }
+  };
 
   const summary = useMemo(() => {
     const signed = agents.filter((agent) => agent.contractStatus === "signed").length;
@@ -511,18 +711,21 @@ export default function ComplianceAgentsPage() {
             ) : (
               filteredAgents.map((agent) => {
                 const isSelected = selectedAgentId === agent.agentId;
+
                 return (
-                  <button
-                    key={agent.agentId}
-                    type="button"
-                    onClick={() => setSelectedAgentId(agent.agentId)}
-                    className={`w-full text-left transition-all ${isSelected ? "scale-[0.995]" : ""}`}
-                  >
+                  <div key={agent.agentId} className={`w-full text-left transition-all ${isSelected ? "scale-[0.995]" : ""}`}>
                     <Card
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedAgentId(agent.agentId)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedAgentId(agent.agentId);
+                        }
+                      }}
                       className={`p-5 bg-white border shadow-xl hover:-translate-y-[1px] transition-all ${
-                        isSelected
-                          ? "border-brand-accent ring-2 ring-brand-accent/10"
-                          : "border-neutral-100 hover:border-neutral-200"
+                        isSelected ? "border-brand-accent ring-2 ring-brand-accent/10" : "border-neutral-100 hover:border-neutral-200"
                       }`}
                     >
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -546,31 +749,48 @@ export default function ComplianceAgentsPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-3 w-full max-w-[420px] ml-auto">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedAgentId(agent.agentId);
-                              setIsEstablishmentsModalOpen(true);
-                            }}
-                            className="rounded-[2px] bg-neutral-50 border border-neutral-100 p-4 min-w-0 flex flex-col items-center justify-center text-center transition-all hover:border-brand-accent hover:bg-brand-accent/5"
-                            aria-label={`Ver E.C. vinculados de ${agent.fullName}`}
-                          >
-                            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-neutral-400">E.C.</p>
-                            <p className="mt-2 text-lg font-black leading-none">{agent.totalEstablishments}</p>
-                          </button>
-                          <div className="rounded-[2px] bg-emerald-50 border border-emerald-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
-                            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Aprovados</p>
-                            <p className="mt-2 text-lg font-black text-emerald-700 leading-none">{agent.approvedEstablishments}</p>
+                        <div className="flex flex-col gap-3 w-full max-w-[420px] ml-auto">
+                          <div className="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void openAgentEditModal(agent.agentId);
+                              }}
+                              className="inline-flex items-center gap-2 rounded-[2px] border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-600 transition-all hover:border-brand-accent hover:text-brand-accent"
+                              aria-label={`Editar agente ${agent.fullName}`}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                              Editar
+                            </button>
                           </div>
-                          <div className="rounded-[2px] bg-amber-50 border border-amber-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
-                            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700">Pendentes</p>
-                            <p className="mt-2 text-lg font-black text-amber-700 leading-none">{agent.pendingEstablishments}</p>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAgentId(agent.agentId);
+                                setIsEstablishmentsModalOpen(true);
+                              }}
+                              className="rounded-[2px] bg-neutral-50 border border-neutral-100 p-4 min-w-0 flex flex-col items-center justify-center text-center transition-all hover:border-brand-accent hover:bg-brand-accent/5"
+                              aria-label={`Ver E.C. vinculados de ${agent.fullName}`}
+                            >
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-neutral-400">E.C.</p>
+                              <p className="mt-2 text-lg font-black leading-none">{agent.totalEstablishments}</p>
+                            </button>
+                            <div className="rounded-[2px] bg-emerald-50 border border-emerald-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700">Aprovados</p>
+                              <p className="mt-2 text-lg font-black text-emerald-700 leading-none">{agent.approvedEstablishments}</p>
+                            </div>
+                            <div className="rounded-[2px] bg-amber-50 border border-amber-100 p-4 min-w-0 flex flex-col items-center justify-center text-center">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-700">Pendentes</p>
+                              <p className="mt-2 text-lg font-black text-amber-700 leading-none">{agent.pendingEstablishments}</p>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </Card>
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -587,9 +807,9 @@ export default function ComplianceAgentsPage() {
                           <Users className="h-3.5 w-3.5" />
                           Ficha do Agente
                         </div>
-                    <h2 className="mt-3 text-2xl font-black tracking-tight text-[#0c0a09] uppercase">
+                        <h2 className="mt-3 text-2xl font-black tracking-tight text-[#0c0a09] uppercase">
                           {toUpperText(selectedAgent.fullName)}
-                    </h2>
+                        </h2>
                         <p className="mt-1 text-xs font-bold uppercase tracking-widest text-neutral-400">
                           {selectedAgent.agentId}
                         </p>
@@ -599,6 +819,14 @@ export default function ComplianceAgentsPage() {
                         <div className="text-[10px] font-black uppercase tracking-[0.16em] text-neutral-400">
                           {source === "api" ? "Fonte API" : "Fonte consolidada"}
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => void openAgentEditModal(selectedAgent.agentId)}
+                          className="inline-flex items-center gap-2 rounded-[2px] border border-neutral-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-neutral-600 transition-all hover:border-brand-accent hover:text-brand-accent"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                          Editar agente
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -683,6 +911,172 @@ export default function ComplianceAgentsPage() {
             </Card>
           </div>
         </div>
+
+        {isAgentEditModalOpen && (
+          <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-5xl bg-white rounded-[18px] shadow-2xl border border-neutral-100 overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="flex items-start justify-between gap-4 p-6 border-b border-neutral-100">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Editar agente</p>
+                  <h3 className="mt-1 text-2xl md:text-3xl font-black text-[#0c0a09] uppercase">
+                    {editingAgent ? toUpperText(editingAgent.fullName) : "Carregando agente"}
+                  </h3>
+                  <p className="mt-1 text-sm font-medium text-neutral-500">
+                    {editingAgent?.agentId || "Obtendo dados completos..."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAgentEditModal}
+                  className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAgentEdit} className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-6 space-y-8">
+                  {isAgentEditLoading && !agentEditForm ? (
+                    <div className="py-20 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-brand-accent mx-auto" />
+                      <p className="mt-4 text-sm font-bold text-neutral-500 uppercase tracking-widest">Carregando cadastro completo...</p>
+                    </div>
+                  ) : agentEditForm ? (
+                    <>
+                      <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Dados cadastrais</p>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Nome completo</label>
+                            <Input value={agentEditForm.fullName} onChange={(e) => updateAgentEditField("fullName", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">CPF</label>
+                            <Input value={agentEditForm.cpf} onChange={(e) => updateAgentEditField("cpf", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">E-mail</label>
+                            <Input value={agentEditForm.email} onChange={(e) => updateAgentEditField("email", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">WhatsApp</label>
+                            <Input value={agentEditForm.whatsapp} onChange={(e) => updateAgentEditField("whatsapp", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Data de nascimento</label>
+                            <Input value={agentEditForm.birthDate} onChange={(e) => updateAgentEditField("birthDate", e.target.value)} placeholder="DD/MM/AAAA" className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Status</label>
+                            <select
+                              value={agentEditForm.status}
+                              onChange={(e) => updateAgentEditField("status", e.target.value)}
+                              className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                            >
+                              <option value="">Selecione um status</option>
+                              <option value="pending">Pendente</option>
+                              <option value="active">Ativo</option>
+                              <option value="inactive">Inativo</option>
+                              <option value="suspended">Suspenso</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Endereço</p>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">CEP</label>
+                            <Input value={agentEditForm.cep} onChange={(e) => updateAgentEditField("cep", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Rua</label>
+                            <Input value={agentEditForm.street} onChange={(e) => updateAgentEditField("street", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Número</label>
+                            <Input value={agentEditForm.number} onChange={(e) => updateAgentEditField("number", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Complemento</label>
+                            <Input value={agentEditForm.complement} onChange={(e) => updateAgentEditField("complement", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Bairro</label>
+                            <Input value={agentEditForm.neighborhood} onChange={(e) => updateAgentEditField("neighborhood", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Cidade</label>
+                            <Input value={agentEditForm.city} onChange={(e) => updateAgentEditField("city", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Estado / UF</label>
+                            <Input value={agentEditForm.state} onChange={(e) => updateAgentEditField("state", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Repasse & indicação</p>
+                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Banco</label>
+                            <Input value={agentEditForm.bankNumber} onChange={(e) => updateAgentEditField("bankNumber", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Agência</label>
+                            <Input value={agentEditForm.accountBranch} onChange={(e) => updateAgentEditField("accountBranch", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Conta</label>
+                            <Input value={agentEditForm.accountNumber} onChange={(e) => updateAgentEditField("accountNumber", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Tem indicação?</label>
+                            <select
+                              value={agentEditForm.hasReferral}
+                              onChange={(e) => updateAgentEditField("hasReferral", e.target.value)}
+                              className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                            >
+                              <option value="">Sem informação</option>
+                              <option value="true">Sim</option>
+                              <option value="false">Não</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Nome do indicador</label>
+                            <Input value={agentEditForm.referrerName} onChange={(e) => updateAgentEditField("referrerName", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">CPF do indicador</label>
+                            <Input value={agentEditForm.referrerCpf} onChange={(e) => updateAgentEditField("referrerCpf", e.target.value)} className="h-12 bg-white border-neutral-200 rounded-[6px]" />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="border-t border-neutral-100 p-4 md:p-6 bg-white flex items-center justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={closeAgentEditModal} className="h-11 px-5 rounded-[2px] border-neutral-200 font-black uppercase tracking-widest">
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="h-11 px-5 rounded-[2px] bg-brand-accent hover:bg-brand-accent-hover text-white font-black uppercase tracking-widest" disabled={isSavingAgentEdit || isAgentEditLoading || !agentEditForm}>
+                    {isSavingAgentEdit ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Salvando...
+                      </span>
+                    ) : (
+                      "Salvar alterações"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {isEstablishmentsModalOpen && selectedAgent && (
           <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
