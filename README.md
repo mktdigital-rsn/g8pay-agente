@@ -29,6 +29,33 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Deploy on DigitalOcean App Platform
+
+The repository includes a DigitalOcean App Platform specification at
+`.do/app.yaml`. Create the app from that file with `doctl`:
+
+```bash
+doctl apps create --spec .do/app.yaml
+```
+
+The spec deploys the `main` branch as a Node.js web service on port `3000`,
+uses the repository’s `npm run build` and `npm start` scripts, and configures
+`/api/health` as the health-check endpoint.
+
+Before deploying to production, set these optional environment variables in
+App Platform’s Settings → App-Level Environment Variables as appropriate:
+
+- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_BRAND`
+- `NEXT_PUBLIC_GOOGLE_CALENDAR_URL`
+- `NEXT_PUBLIC_D4SIGN_ENV`
+- `D4SIGN_API_TOKEN` (secret)
+- `D4SIGN_CRYPT_KEY` (secret)
+- `D4SIGN_SAFE_UUID` (secret)
+
+The generated contract PDF is returned in the API response and is not intended
+to rely on App Platform’s ephemeral local filesystem for persistence.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
