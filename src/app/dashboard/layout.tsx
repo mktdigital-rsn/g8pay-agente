@@ -224,6 +224,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         bankNumber: "389"
       });
 
+      if (localRole === "admin") {
+        setIsUserLoading(false);
+        return;
+      }
+
       try {
         const userRes = await api.get("/api/users/data");
 
@@ -252,6 +257,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     const fetchBalance = async () => {
+      const localRole = typeof window !== "undefined" ? localStorage.getItem("userRole") : "agent";
+
+      if (localRole === "admin") {
+        setBalance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(0));
+        setGlobalBalance(0);
+        setIsLoadingData(false);
+        setGlobalBalanceLoading(false);
+        return;
+      }
+
       try {
         const balanceRes = await api.get("/api/banco/saldo/getSaldo");
 

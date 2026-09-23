@@ -20,6 +20,8 @@ import {
   Phone,
   RefreshCcw,
   Loader2,
+  KeyRound,
+  LockOpen,
   Search,
   Shield,
   Store,
@@ -60,6 +62,18 @@ type AgentCrmRecord = {
   latestActivityAt?: string;
   source?: "api" | "fallback";
   establishments?: AgentEstablishmentRecord[];
+  contracts?: AgentContractRecord[];
+};
+
+type AgentContractRecord = {
+  id: string;
+  title: string;
+  status: string;
+  signatureLink?: string | null;
+  signedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  downloadUrl?: string;
 };
 
 type AgentEstablishmentRecord = {
@@ -206,19 +220,19 @@ function buildAgentEditForm(agent: Partial<AgentCrmRecord>): AgentEditForm {
     whatsapp: agent.whatsapp || "",
     birthDate: formatDateForDisplay(agent.birthDate),
     status: agent.status || "",
-    cep: "",
-    street: "",
-    number: "",
-    complement: "",
-    neighborhood: "",
-    city: "",
-    state: "",
-    bankNumber: "",
-    accountBranch: "",
-    accountNumber: "",
-    hasReferral: "",
-    referrerName: "",
-    referrerCpf: "",
+    cep: agent.cep || "",
+    street: agent.street || "",
+    number: agent.number || "",
+    complement: agent.complement || "",
+    neighborhood: agent.neighborhood || "",
+    city: agent.city || "",
+    state: agent.state || "",
+    bankNumber: agent.bankNumber || "",
+    accountBranch: agent.accountBranch || "",
+    accountNumber: agent.accountNumber || "",
+    hasReferral: typeof agent.hasReferral === "boolean" ? String(agent.hasReferral) : "",
+    referrerName: agent.referrerName || "",
+    referrerCpf: agent.referrerCpf || "",
   };
 }
 
@@ -272,6 +286,11 @@ export default function ComplianceAgentsPage() {
   const [editingAgent, setEditingAgent] = useState<AgentCrmRecord | null>(null);
   const [agentEditForm, setAgentEditForm] = useState<AgentEditForm | null>(null);
 
+  const firstString = (...values: unknown[]) => {
+    const match = values.find((value) => typeof value === "string" && value.trim().length > 0);
+    return match ? String(match) : undefined;
+  };
+
   const normalizeApiAgent = (raw: Record<string, unknown>): AgentCrmRecord => ({
     agentId: String(raw.agentId || raw.id || ""),
     fullName: String(raw.fullName || raw.name || raw.agentName || "Agente sem nome"),
@@ -279,15 +298,15 @@ export default function ComplianceAgentsPage() {
     email: String(raw.email || ""),
     whatsapp: String(raw.whatsapp || ""),
     birthDate: raw.birthDate ? String(raw.birthDate) : undefined,
-    cep: raw.cep ? String(raw.cep) : undefined,
-    street: raw.street ? String(raw.street) : undefined,
-    number: raw.number ? String(raw.number) : undefined,
-    complement: raw.complement ? String(raw.complement) : undefined,
-    neighborhood: raw.neighborhood ? String(raw.neighborhood) : undefined,
+    cep: firstString(raw.cep, raw.zipCode, raw.postalCode),
+    street: firstString(raw.street, raw.rua, raw.logradouro, raw.address),
+    number: firstString(raw.number, raw.numero, raw.addressNumber),
+    complement: firstString(raw.complement, raw.complemento, raw.addressComplement),
+    neighborhood: firstString(raw.neighborhood, raw.bairro, raw.district),
     status: String(raw.status || (raw.contractStatus === "signed" ? "active" : "pending")),
-    bankNumber: raw.bankNumber ? String(raw.bankNumber) : undefined,
-    accountBranch: raw.accountBranch ? String(raw.accountBranch) : undefined,
-    accountNumber: raw.accountNumber ? String(raw.accountNumber) : undefined,
+    bankNumber: firstString(raw.bankNumber, raw.banco, raw.bank, raw.bankCode),
+    accountBranch: firstString(raw.accountBranch, raw.agencia, raw.branch),
+    accountNumber: firstString(raw.accountNumber, raw.conta, raw.account),
     hasReferral: typeof raw.hasReferral === "boolean" ? raw.hasReferral : undefined,
     referrerName: raw.referrerName ? String(raw.referrerName) : undefined,
     referrerCpf: raw.referrerCpf ? String(raw.referrerCpf) : undefined,
@@ -298,14 +317,17 @@ export default function ComplianceAgentsPage() {
     approvedEstablishments: Number(raw.approvedEstablishments || 0),
     pendingEstablishments: Number(raw.pendingEstablishments || 0),
     rejectedEstablishments: Number(raw.rejectedEstablishments || 0),
-    city: raw.city ? String(raw.city) : undefined,
-    state: raw.state ? String(raw.state) : undefined,
+    city: firstString(raw.city, raw.cidade),
+    state: firstString(raw.state, raw.estado, raw.uf),
     latestEstablishmentName: raw.latestEstablishmentName ? String(raw.latestEstablishmentName) : raw.latestEcName ? String(raw.latestEcName) : undefined,
     latestEstablishmentStatus: raw.latestEstablishmentStatus ? String(raw.latestEstablishmentStatus) : raw.latestEcStatus ? String(raw.latestEcStatus) : undefined,
     latestActivityAt: raw.latestActivityAt ? String(raw.latestActivityAt) : raw.updatedAt ? String(raw.updatedAt) : raw.createdAt ? String(raw.createdAt) : undefined,
     source: "api",
     establishments: Array.isArray(raw.establishments)
       ? (raw.establishments as AgentEstablishmentRecord[])
+      : [],
+    contracts: Array.isArray(raw.contracts)
+      ? (raw.contracts as AgentContractRecord[])
       : [],
   });
 
@@ -480,8 +502,22 @@ export default function ComplianceAgentsPage() {
       const payload = response.data?.data || response.data?.agent || null;
       if (payload) {
         const normalized = normalizeApiAgent(payload);
-        setEditingAgent(normalized);
-        setAgentEditForm(buildAgentEditForm(normalized));
+        const mergedAgent = {
+          ...(fallbackAgent || {}),
+          ...normalized,
+          cep: normalized.cep || fallbackAgent?.cep,
+          street: normalized.street || fallbackAgent?.street,
+          number: normalized.number || fallbackAgent?.number,
+          complement: normalized.complement || fallbackAgent?.complement,
+          neighborhood: normalized.neighborhood || fallbackAgent?.neighborhood,
+          city: normalized.city || fallbackAgent?.city,
+          state: normalized.state || fallbackAgent?.state,
+          bankNumber: normalized.bankNumber || fallbackAgent?.bankNumber,
+          accountBranch: normalized.accountBranch || fallbackAgent?.accountBranch,
+          accountNumber: normalized.accountNumber || fallbackAgent?.accountNumber,
+        };
+        setEditingAgent(mergedAgent);
+        setAgentEditForm(buildAgentEditForm(mergedAgent));
       }
     } catch (err) {
       console.warn("Não foi possível carregar o agente para edição:", err);
@@ -509,7 +545,6 @@ export default function ComplianceAgentsPage() {
         email: agentEditForm.email,
         whatsapp: agentEditForm.whatsapp,
         birthDate: normalizeDateForApi(agentEditForm.birthDate) || undefined,
-        status: agentEditForm.status,
         cep: agentEditForm.cep,
         street: agentEditForm.street,
         number: agentEditForm.number,
@@ -537,6 +572,28 @@ export default function ComplianceAgentsPage() {
       toast.error(err.response?.data?.error || err.message || "Não foi possível salvar as alterações.", { id: toastId });
     } finally {
       setIsSavingAgentEdit(false);
+    }
+  };
+
+  const handleAdminAgentAction = async (agent: AgentCrmRecord, action: "reset-password" | "unlock") => {
+    const actionLabel = action === "reset-password" ? "resetar a senha" : "desbloquear o acesso";
+    const confirmed = window.confirm(`Deseja ${actionLabel} de ${agent.fullName}?`);
+    if (!confirmed) return;
+
+    const toastId = toast.loading(action === "reset-password" ? "Gerando senha temporária..." : "Desbloqueando acesso...");
+
+    try {
+      const endpoint = action === "reset-password" ? "admin-reset-password" : "admin-unlock";
+      const response = await api.post(`/api/agents/${agent.agentId}/${endpoint}`);
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível concluir a ação.");
+      }
+
+      toast.success(response.data.message || "Ação concluída com sucesso.", { id: toastId });
+      await loadAgents();
+    } catch (error: any) {
+      console.error("Erro na ação administrativa do agente:", error);
+      toast.error(error.response?.data?.error || error.message || "Não foi possível concluir a ação.", { id: toastId });
     }
   };
 
@@ -827,6 +884,22 @@ export default function ComplianceAgentsPage() {
                           <Edit2 className="h-3.5 w-3.5" />
                           Editar agente
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAdminAgentAction(selectedAgent, "reset-password")}
+                          className="inline-flex items-center gap-2 rounded-[2px] border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 transition-all hover:border-amber-300 hover:bg-amber-100"
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          Reset senha
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAdminAgentAction(selectedAgent, "unlock")}
+                          className="inline-flex items-center gap-2 rounded-[2px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100"
+                        >
+                          <LockOpen className="h-3.5 w-3.5" />
+                          Desbloquear
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -854,6 +927,52 @@ export default function ComplianceAgentsPage() {
                       <InfoLine icon={Building2} label="Último E.C." value={selectedAgent.latestEstablishmentName || "---"} />
                       <InfoLine icon={Clock} label="Status do último E.C." value={selectedAgent.latestEstablishmentStatus || "---"} />
                     </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-brand-accent border-b border-orange-100 pb-2">
+                      Documentos do agente
+                    </h3>
+                    {selectedAgent.contracts && selectedAgent.contracts.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedAgent.contracts.map((contract) => (
+                          <div key={contract.id} className="rounded-[2px] border border-neutral-100 bg-neutral-50 p-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-tight text-[#0c0a09] truncate">{contract.title}</p>
+                              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                                {contract.status === "signed" ? "Assinado" : "Pendente"} • {formatDate(contract.signedAt || contract.updatedAt || contract.createdAt)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <a
+                                href={`${api.defaults.baseURL}${contract.downloadUrl || `/api/contracts/${contract.id}/download`}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="h-9 w-9 rounded-[2px] border border-neutral-200 bg-white text-neutral-600 hover:text-brand-accent hover:border-brand-accent flex items-center justify-center"
+                                title="Baixar contrato"
+                              >
+                                <Download className="h-4 w-4" />
+                              </a>
+                              {contract.signatureLink && (
+                                <a
+                                  href={contract.signatureLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="h-9 w-9 rounded-[2px] border border-neutral-200 bg-white text-neutral-600 hover:text-brand-accent hover:border-brand-accent flex items-center justify-center"
+                                  title="Abrir link de assinatura"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-[2px] border border-dashed border-neutral-200 bg-neutral-50 p-4 text-xs font-bold text-neutral-400 text-center">
+                        Nenhum contrato/documento disponível para este agente.
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">
@@ -965,20 +1084,6 @@ export default function ComplianceAgentsPage() {
                           <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Data de nascimento</label>
                             <Input value={agentEditForm.birthDate} onChange={(e) => updateAgentEditField("birthDate", e.target.value)} placeholder="DD/MM/AAAA" className="h-12 bg-white border-neutral-200 rounded-[6px]" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Status</label>
-                            <select
-                              value={agentEditForm.status}
-                              onChange={(e) => updateAgentEditField("status", e.target.value)}
-                              className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
-                            >
-                              <option value="">Selecione um status</option>
-                              <option value="pending">Pendente</option>
-                              <option value="active">Ativo</option>
-                              <option value="inactive">Inativo</option>
-                              <option value="suspended">Suspenso</option>
-                            </select>
                           </div>
                         </div>
                       </div>

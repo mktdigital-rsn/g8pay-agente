@@ -38,6 +38,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Send,
+  Upload,
+  Edit2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -94,6 +96,32 @@ type EstablishmentDetails = Establishment & {
     fullName: string;
     cpf: string;
   } | null;
+};
+type EcEditForm = {
+  razaoSocial: string;
+  nomeFantasia: string;
+  cnpjCpf: string;
+  tipoEstabelecimento: string;
+  tipoEmpresa: string;
+  contatoPrincipal: string;
+  dataFundacao: string;
+  horarioFuncionamento: string;
+  site: string;
+  shopping: string;
+  descricaoShopping: string;
+  cnae: string;
+  mcc: string;
+  faturamentoMensal: string;
+  ticketMedio: string;
+  antecipacaoRecebiveis: string;
+  quantidade: string;
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  state: string;
 };
 export default function CompliancePage() {
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
@@ -450,6 +478,142 @@ export default function CompliancePage() {
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationMessage, setNotificationMessage] = useState("");
   const [isSendingNotification, setIsSendingNotification] = useState(false);
+  const [isEcEditOpen, setIsEcEditOpen] = useState(false);
+  const [isSavingEcEdit, setIsSavingEcEdit] = useState(false);
+  const [ecEditForm, setEcEditForm] = useState<EcEditForm | null>(null);
+  const [isUploadingAdminDoc, setIsUploadingAdminDoc] = useState(false);
+  const adminDocInputRef = useRef<HTMLInputElement>(null);
+
+  const buildEcEditForm = (ec: EstablishmentDetails): EcEditForm => ({
+    razaoSocial: ec.razaoSocial || "",
+    nomeFantasia: ec.nomeFantasia || "",
+    cnpjCpf: ec.cnpjCpf || "",
+    tipoEstabelecimento: ec.tipoEstabelecimento || "",
+    tipoEmpresa: ec.tipoEmpresa || "",
+    contatoPrincipal: ec.contatoPrincipal || "",
+    dataFundacao: ec.dataFundacao || "",
+    horarioFuncionamento: ec.horarioFuncionamento || "",
+    site: ec.site || "",
+    shopping: ec.shopping || "Não",
+    descricaoShopping: ec.descricaoShopping || "",
+    cnae: ec.cnae || "",
+    mcc: ec.mcc || "",
+    faturamentoMensal: ec.faturamentoMensal || "",
+    ticketMedio: ec.ticketMedio || "",
+    antecipacaoRecebiveis: ec.antecipacaoRecebiveis || "",
+    quantidade: ec.quantidade || "1",
+    cep: ec.cep || "",
+    rua: ec.rua || "",
+    numero: ec.numero || "",
+    complemento: ec.complemento || "",
+    bairro: ec.bairro || "",
+    cidade: ec.cidade || "",
+    state: ec.state || "",
+  });
+
+  const updateEcEditField = <K extends keyof EcEditForm>(field: K, value: EcEditForm[K]) => {
+    setEcEditForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const openEcEdit = () => {
+    if (!selectedEc) return;
+    setEcEditForm(buildEcEditForm(selectedEc));
+    setIsEcEditOpen(true);
+  };
+
+  const refreshSelectedEc = async (id: string) => {
+    const res = await api.get(`/api/establishments/${id}`);
+    if (res.data?.success) {
+      const details: EstablishmentDetails = res.data.data;
+      setSelectedEc(details);
+      setEcObservations(details.observations || "");
+      const initialReviews: Record<string, { status: "approved" | "rejected" | "revisions" | "pending", observations: string }> = {};
+      details.documents.forEach((doc) => {
+        initialReviews[doc.id] = {
+          status: "pending",
+          observations: doc.observations || "",
+        };
+      });
+      setDocReviews(initialReviews);
+      return details;
+    }
+    throw new Error(res.data?.error || "Erro ao carregar detalhes do estabelecimento.");
+  };
+
+  const handleSaveEcEdit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedEc || !ecEditForm) return;
+
+    setIsSavingEcEdit(true);
+    const toastId = toast.loading("Salvando dados do E.C...");
+
+    try {
+      const response = await api.patch(`/api/establishments/admin/${selectedEc.id}`, ecEditForm);
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível salvar o E.C.");
+      }
+
+      await refreshSelectedEc(selectedEc.id);
+      await fetchEstablishments();
+      setIsEcEditOpen(false);
+      toast.success("Dados cadastrais do E.C. atualizados.", { id: toastId });
+    } catch (error: any) {
+      console.error("Error saving E.C. by admin:", error);
+      toast.error(error.response?.data?.error || error.message || "Não foi possível salvar o E.C.", { id: toastId });
+    } finally {
+      setIsSavingEcEdit(false);
+    }
+  };
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+
+  const handleAdminDocUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!selectedEc || !file) return;
+
+    const documentName = window.prompt("Nome do documento", file.name.replace(/\.[^.]+$/, ""));
+    if (!documentName?.trim()) {
+      event.target.value = "";
+      return;
+    }
+
+    setIsUploadingAdminDoc(true);
+    const toastId = toast.loading("Anexando documento...");
+
+    try {
+      const base64 = await fileToDataUrl(file);
+      const response = await api.post(`/api/establishments/${selectedEc.id}/documents`, {
+        name: documentName.trim(),
+        fileName: file.name,
+        base64,
+      });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error || "Não foi possível anexar o documento.");
+      }
+
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+        setPreviewBlobUrl(null);
+      }
+      setActivePreviewDoc(null);
+      await refreshSelectedEc(selectedEc.id);
+      await fetchEstablishments();
+      toast.success("Documento anexado para análise.", { id: toastId });
+    } catch (error: any) {
+      console.error("Error uploading admin document:", error);
+      toast.error(error.response?.data?.error || error.message || "Não foi possível anexar o documento.", { id: toastId });
+    } finally {
+      setIsUploadingAdminDoc(false);
+      event.target.value = "";
+    }
+  };
   const fetchEstablishments = async (overrides?: {
     status?: string;
     search?: string;
@@ -649,33 +813,55 @@ export default function CompliancePage() {
     return (
       <div className="p-4 sm:p-8 xl:p-12 h-full overflow-y-auto w-full bg-[#f8f9fa] relative no-scrollbar animate-in fade-in duration-300">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        <div className="mb-8 rounded-[18px] border border-neutral-100 bg-white/80 shadow-sm p-4 md:p-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4 min-w-0">
           <Button
             variant="outline"
             onClick={() => setSelectedEc(null)}
-            className="h-10 w-10 p-0 rounded-full border-neutral-200 text-neutral-500 hover:text-black hover:bg-neutral-50"
+            className="h-10 w-10 p-0 rounded-full border-neutral-200 text-neutral-500 hover:text-black hover:bg-neutral-50 shrink-0 mt-1"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tighter text-[#0c0a09] uppercase">
-                Validação de Cadastro - {selectedEc.nomeFantasia}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-brand-accent">Validação de Cadastro</p>
+                {getStatusBadge(selectedEc.status)}
+              </div>
+              <h1 className="mt-2 text-2xl md:text-4xl font-black tracking-tight text-[#0c0a09] uppercase leading-[1.05] break-words">
+                {selectedEc.nomeFantasia}
               </h1>
-              {getStatusBadge(selectedEc.status)}
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-neutral-500">
+                <span className="rounded-full border border-neutral-100 bg-neutral-50 px-3 py-1">
+                  Responsável: <span className="text-[#0c0a09]">{agentName || "Sem vínculo"}</span>
+                </span>
+                <span className="rounded-full border border-neutral-100 bg-neutral-50 px-3 py-1">
+                  CPF: <span className="text-[#0c0a09]">{agentCpf ? maskAgentCpf(agentCpf) : "---"}</span>
+                </span>
+                <span className="rounded-full border border-neutral-100 bg-neutral-50 px-3 py-1">
+                  CNPJ/CPF E.C.: <span className="text-[#0c0a09]">{selectedEc.cnpjCpf}</span>
+                </span>
+              </div>
             </div>
-            <p className="text-xs text-neutral-400 font-bold uppercase tracking-widest mt-1">
-              Responsável: <span className="text-neutral-700 font-black">{agentName || "Sem vínculo"}</span> • CPF: <span className="text-neutral-700 font-black">{maskAgentCpf(agentCpf)}</span>
-            </p>
           </div>
-          <Button
-            type="button"
-            onClick={() => openNotificationComposer("establishment")}
-            className="h-11 px-4 rounded-sm bg-[#0c0a09] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center gap-2"
-          >
-            <Send className="h-4 w-4" />
-            Notificar este E.C.
-          </Button>
+          <div className="flex flex-col sm:flex-row xl:flex-col 2xl:flex-row items-stretch gap-2 xl:items-end 2xl:items-stretch">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={openEcEdit}
+              className="h-11 w-full sm:w-[260px] px-4 rounded-sm bg-white border-neutral-200 text-[#0c0a09] font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center justify-center gap-2"
+            >
+              <Edit2 className="h-4 w-4" />
+              Editar cadastro
+            </Button>
+            <Button
+              type="button"
+              onClick={() => openNotificationComposer("establishment")}
+              className="h-11 w-full sm:w-[260px] px-4 rounded-sm bg-[#0c0a09] hover:bg-black text-white font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center justify-center gap-2"
+            >
+              <Send className="h-4 w-4" />
+              Notificar este E.C.
+            </Button>
+          </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           {/* Left Column: Register Data, Address & Risk Assessment */}
@@ -893,9 +1079,28 @@ export default function CompliancePage() {
 
         {/* ── Full-width: Validação de Documentos + Parecer Final ── */}
         <Card className="mt-8 p-6 md:p-8 bg-white border border-neutral-100 border-l-[6px] border-l-brand-accent shadow-xl space-y-6 pb-20">
-          <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider border-b border-neutral-100 pb-4 flex items-center gap-2">
-            <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
-          </h3>
+          <div className="border-b border-neutral-100 pb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h3 className="text-sm font-black text-[#0c0a09] uppercase tracking-wider flex items-center gap-2">
+              <FileSearch className="h-5 w-5 text-brand-accent" /> Validação de Documentos e Previsão
+            </h3>
+            <input
+              ref={adminDocInputRef}
+              type="file"
+              className="hidden"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx"
+              onChange={handleAdminDocUpload}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => adminDocInputRef.current?.click()}
+              disabled={isUploadingAdminDoc}
+              className="h-10 px-4 rounded-sm bg-white border-neutral-200 text-[#0c0a09] font-black text-[10px] uppercase tracking-widest shadow-sm flex items-center gap-2 w-full md:w-auto"
+            >
+              {isUploadingAdminDoc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Anexar documento
+            </Button>
+          </div>
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch">
             {/* Documents Cards List */}
             <div className="xl:col-span-5 space-y-4 max-h-[520px] overflow-y-auto pr-2 scrollbar-thin">
@@ -1201,6 +1406,146 @@ export default function CompliancePage() {
                   </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+        {isEcEditOpen && ecEditForm && (
+          <div className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-5xl rounded-[18px] bg-white border border-neutral-100 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-neutral-100 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Editar cadastro do E.C.</p>
+                  <h3 className="mt-1 text-2xl font-black text-[#0c0a09] uppercase">
+                    {selectedEc?.nomeFantasia || "Estabelecimento"}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-500 font-medium">
+                    Atualize os dados cadastrais usados na validação de compliance.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEcEditOpen(false)}
+                  className="h-10 w-10 rounded-full border border-neutral-200 text-neutral-500 hover:text-[#0c0a09] hover:border-neutral-300 hover:bg-neutral-50 flex items-center justify-center transition-colors shrink-0"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveEcEdit} className="flex-1 min-h-0 flex flex-col">
+                <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+                  <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Dados cadastrais</p>
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {([
+                        ["razaoSocial", "Razão social"],
+                        ["nomeFantasia", "Nome fantasia"],
+                        ["cnpjCpf", "CNPJ/CPF"],
+                        ["contatoPrincipal", "Contato principal"],
+                        ["tipoEstabelecimento", "Tipo de estabelecimento"],
+                        ["tipoEmpresa", "Tipo de empresa"],
+                        ["dataFundacao", "Data de fundação"],
+                        ["horarioFuncionamento", "Horário de funcionamento"],
+                        ["site", "Site"],
+                        ["cnae", "CNAE"],
+                        ["mcc", "MCC"],
+                        ["quantidade", "Quantidade de máquinas"],
+                      ] as const).map(([field, label]) => (
+                        <div key={field} className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">{label}</label>
+                          <input
+                            value={ecEditForm[field]}
+                            onChange={(e) => updateEcEditField(field, e.target.value)}
+                            className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                          />
+                        </div>
+                      ))}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Shopping?</label>
+                        <select
+                          value={ecEditForm.shopping}
+                          onChange={(e) => updateEcEditField("shopping", e.target.value)}
+                          className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                        >
+                          <option value="Não">Não</option>
+                          <option value="Sim">Sim</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">Descrição do shopping</label>
+                        <input
+                          value={ecEditForm.descricaoShopping}
+                          onChange={(e) => updateEcEditField("descricaoShopping", e.target.value)}
+                          className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Repasse e faturamento</p>
+                      <div className="mt-4 grid grid-cols-1 gap-4">
+                        {([
+                          ["faturamentoMensal", "Faturamento mensal"],
+                          ["ticketMedio", "Ticket médio"],
+                          ["antecipacaoRecebiveis", "Antecipação de recebíveis"],
+                        ] as const).map(([field, label]) => (
+                          <div key={field} className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">{label}</label>
+                            <input
+                              value={ecEditForm[field]}
+                              onChange={(e) => updateEcEditField(field, e.target.value)}
+                              className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[14px] border border-neutral-100 bg-neutral-50/70 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-accent">Endereço de instalação</p>
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {([
+                          ["cep", "CEP"],
+                          ["state", "UF"],
+                          ["rua", "Rua"],
+                          ["numero", "Número"],
+                          ["complemento", "Complemento"],
+                          ["bairro", "Bairro"],
+                          ["cidade", "Cidade"],
+                        ] as const).map(([field, label]) => (
+                          <div key={field} className={`space-y-2 ${field === "rua" ? "sm:col-span-2" : ""}`}>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500 ml-1">{label}</label>
+                            <input
+                              value={ecEditForm[field]}
+                              onChange={(e) => updateEcEditField(field, e.target.value)}
+                              className="h-12 w-full rounded-[6px] border border-neutral-200 bg-white px-3 text-sm font-medium text-[#0c0a09] outline-none focus:border-brand-accent"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5 border-t border-neutral-100 bg-white flex flex-col sm:flex-row justify-end gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => setIsEcEditOpen(false)}
+                    className="h-11 px-5 rounded-sm bg-white hover:bg-neutral-50 text-[#0c0a09] border border-neutral-200 font-black text-[10px] uppercase tracking-widest"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSavingEcEdit}
+                    className="h-11 px-5 rounded-sm bg-brand-accent hover:bg-brand-accent-hover text-white font-black text-[10px] uppercase tracking-widest flex items-center gap-2"
+                  >
+                    {isSavingEcEdit && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Salvar cadastro
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}
