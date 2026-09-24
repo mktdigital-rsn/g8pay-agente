@@ -70,6 +70,57 @@ type DashboardNotification = {
   readAt?: string | null;
 };
 
+function extractApiValue(value: unknown, fallback = "---") {
+  if (value && typeof value === "object" && "present" in value) {
+    const wrapped = value as { present?: boolean; value?: unknown };
+    return wrapped.present ? String(wrapped.value || fallback) : fallback;
+  }
+
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function pickAccountPayload(source: Record<string, unknown>) {
+  const accountBranch = extractApiValue(source.accountBranch || source.branch || source.agencia, "");
+  const accountNumber = extractApiValue(source.accountNumber || source.account || source.conta, "");
+  const bankNumber = extractApiValue(source.bankNumber || source.bank || source.banco || source.bankCode, "");
+
+  return {
+    accountBranch,
+    accountNumber,
+    bankNumber,
+  };
+}
+
+function normalizeAgentUser(agent: Record<string, unknown>) {
+  const fullName = extractApiValue(agent.fullName || agent.name || agent.nome, "Agente G8Pay");
+  const email = extractApiValue(agent.email, "");
+  const cpf = extractApiValue(agent.cpf || agent.taxNumber, "");
+  const whatsapp = extractApiValue(agent.whatsapp, "");
+  const accountPayload = pickAccountPayload(agent);
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem("userName", fullName);
+    localStorage.setItem("userEmail", email);
+    localStorage.setItem("userCpf", cpf);
+    localStorage.setItem("userWhatsapp", whatsapp);
+    localStorage.setItem("userRole", extractApiValue(agent.role, "agent"));
+  }
+
+  return {
+    name: fullName,
+    nome: fullName,
+    email,
+    taxNumber: cpf,
+    cpf,
+    whatsapp,
+    status: extractApiValue(agent.status, "CONTA_PENDENTE"),
+    accountBranch: accountPayload.accountBranch,
+    accountNumber: accountPayload.accountNumber,
+    bankNumber: accountPayload.bankNumber,
+  };
+}
+
 type NotificationScope = "all" | "agent" | "establishment";
 
 type NotificationAgentOption = {
@@ -209,8 +260,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       setUserName(initialName);
       setAccountInfo({
-        agency: "0001",
-        account: "12345-6"
+        agency: "",
+        account: ""
       });
 
       setUser({
@@ -218,10 +269,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         nome: initialName,
         email: initialEmail,
         taxNumber: initialCpf,
-        status: "CONTA_APROVADA",
-        accountBranch: "0001",
-        accountNumber: "12345-6",
-        bankNumber: "389"
+        status: "CONTA_PENDENTE",
+        accountBranch: "",
+        accountNumber: "",
+        bankNumber: ""
       });
 
       if (localRole === "admin") {
@@ -229,22 +280,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return;
       }
 
+      if (localAgentId) {
+        try {
+          const agentRes = await api.get(`/api/agents/${localAgentId}`);
+          const agentData = agentRes.data?.data || agentRes.data?.agent || null;
+
+          if (agentData) {
+            const normalizedAgent = normalizeAgentUser(agentData);
+            setUser(normalizedAgent);
+            setUserName(normalizedAgent.name);
+            setAccountInfo({
+              agency: normalizedAgent.accountBranch || "---",
+              account: normalizedAgent.accountNumber || "---",
+            });
+          }
+        } catch (agentErr) {
+          console.warn("Não foi possível atualizar os dados do agente logado:", agentErr);
+        }
+      }
+
       try {
         const userRes = await api.get("/api/users/data");
 
         if (userRes.data) {
           const u = userRes.data;
-          setUser(u);
-          setUserName(u.name || u.nome || "Cliente");
-          
-          const extract = (val: any) => (val && typeof val === 'object' && 'present' in val) 
-            ? (val.present ? val.value : "---") 
-            : (val || "---");
+          const accountPayload = pickAccountPayload(u);
+
+          if (localAgentId) {
+            setUser((current: any) => ({
+              ...(current || {}),
+              accountBranch: accountPayload.accountBranch || current?.accountBranch || "",
+              accountNumber: accountPayload.accountNumber || current?.accountNumber || "",
+              bankNumber: accountPayload.bankNumber || current?.bankNumber || "",
+            }));
+          } else {
+            setUser(u);
+            setUserName(u.name || u.nome || "Cliente");
+          }
 
           setAccountInfo({ 
-            agency: extract(u.accountBranch || u.branch || u.agencia), 
-            account: extract(u.accountNumber || u.account || u.conta) 
+            agency: accountPayload.accountBranch || "---", 
+            account: accountPayload.accountNumber || "---" 
           });
+
+          if (localAgentId && (accountPayload.accountBranch || accountPayload.accountNumber || accountPayload.bankNumber)) {
+            void api.patch(`/api/agents/${localAgentId}`, accountPayload).catch((syncErr) => {
+              console.warn("Não foi possível sincronizar a conta do agente:", syncErr);
+            });
+          }
         }
       } catch (err) {
         console.error("Error fetching user data:", err);

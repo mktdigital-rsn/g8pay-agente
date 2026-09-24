@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { currentBrand } from "@/config/brand";
+import api from "@/lib/api";
 
 export default function DashboardHome() {
   const [userName, setUserName] = useState("Agente G8Pay");
@@ -30,6 +31,7 @@ export default function DashboardHome() {
   useEffect(() => {
     // Load from localStorage if present
     const localName = localStorage.getItem("userName");
+    const agentId = localStorage.getItem("agentId");
     const signedContractStr = localStorage.getItem("signedContract");
 
     if (localName) {
@@ -46,6 +48,31 @@ export default function DashboardHome() {
       } catch (err) {
         console.error("Error parsing contract data:", err);
       }
+    }
+
+    if (agentId) {
+      void api.get(`/api/agents/${agentId}`).then((response) => {
+        const agent = response.data?.data || response.data?.agent;
+        if (!agent) return;
+
+        const fullName = agent.fullName || agent.name || localName || "Agente G8Pay";
+        setUserName(fullName);
+        setAgentData((current: any) => ({
+          ...(current || {}),
+          ...agent,
+          fullName,
+          cpf: agent.cpf || current?.cpf,
+          email: agent.email || current?.email,
+          whatsapp: agent.whatsapp || current?.whatsapp,
+        }));
+
+        localStorage.setItem("userName", fullName);
+        if (agent.email) localStorage.setItem("userEmail", agent.email);
+        if (agent.cpf) localStorage.setItem("userCpf", agent.cpf);
+        if (agent.whatsapp) localStorage.setItem("userWhatsapp", agent.whatsapp);
+      }).catch((err) => {
+        console.warn("Não foi possível atualizar os dados do agente na home:", err);
+      });
     }
   }, []);
 

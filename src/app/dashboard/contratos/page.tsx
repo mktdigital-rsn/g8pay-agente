@@ -41,15 +41,30 @@ export default function ContratosPage() {
     if (agentId) {
       const fetchContract = async () => {
         try {
-          const response = await api.get(`/api/contracts?agentId=${agentId}`);
+          const [response, agentResponse] = await Promise.all([
+            api.get(`/api/contracts?agentId=${agentId}`),
+            api.get(`/api/agents/${agentId}`).catch(() => null),
+          ]);
+
+          const agent = agentResponse?.data?.data || agentResponse?.data?.agent || null;
+          const fullName = agent?.fullName || localStorage.getItem("userName") || "Agente G8Pay";
+          const cpf = agent?.cpf || localStorage.getItem("userCpf") || "---";
+          const email = agent?.email || localStorage.getItem("userEmail") || "---";
+          const whatsapp = agent?.whatsapp || localStorage.getItem("userWhatsapp") || "---";
+
+          localStorage.setItem("userName", fullName);
+          localStorage.setItem("userCpf", cpf);
+          localStorage.setItem("userEmail", email);
+          localStorage.setItem("userWhatsapp", whatsapp);
+
           if (response.data && response.data.success && response.data.data.length > 0) {
             const apiContract = response.data.data[0];
             const updatedContract = {
               agentId: apiContract.agentId,
-              fullName: localStorage.getItem("userName") || "Agente G8Pay",
-              cpf: localStorage.getItem("userCpf") || "---",
-              email: localStorage.getItem("userEmail") || "---",
-              whatsapp: localStorage.getItem("userWhatsapp") || "---",
+              fullName,
+              cpf,
+              email,
+              whatsapp,
               date: new Date(apiContract.createdAt).toLocaleDateString("pt-BR"),
               pdfPreviewUrl: `${api.defaults.baseURL}/api/contracts/${apiContract.id}/download`,
               signatureLink: apiContract.signatureLink,

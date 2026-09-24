@@ -162,6 +162,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
 
     try {
       const payload = {
+        identifier: cleanIdentifier,
         cpf: cleanIdentifier,
         password: password,
       };
@@ -189,7 +190,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
       const message =
         err.response?.data?.error ||
         err.response?.data?.message ||
-        "Não foi possível realizar o login. CPF/CNPJ ou senha inválidos.";
+        "Não foi possível realizar o login. CPF/CNPJ, e-mail ou senha inválidos.";
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -309,7 +310,10 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
 
     setIsLoading(true);
     try {
-      const response = await api.post("/api/agents/forgot-password", { cpf: forgotCpf.trim() });
+      const response = await api.post("/api/agents/forgot-password", {
+        identifier: forgotCpf.trim(),
+        cpf: forgotCpf.trim(),
+      });
       
       if (response.data && response.data.success) {
         setMaskedEmail(response.data.email);
@@ -318,7 +322,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
       }
     } catch (err: any) {
       console.error("Forgot password error:", err);
-      toast.error(err.response?.data?.error || "Erro ao solicitar recuperação. Verifique o documento.");
+      toast.error(err.response?.data?.error || "Erro ao solicitar recuperação. Verifique o CPF/CNPJ ou e-mail.");
     } finally {
       setIsLoading(false);
     }
@@ -344,6 +348,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
     setIsLoading(true);
     try {
       const response = await api.post("/api/agents/reset-password", {
+        identifier: forgotCpf.trim(),
         cpf: forgotCpf.trim(),
         code: recoveryCode,
         newPassword: newPassword,
@@ -508,7 +513,7 @@ export default function LoginScreen({ onBecomeAgent, onCommercialSchedule }: Log
                           : "group-focus-within:text-brand-accent"
                       }`} />
                       <Input
-                        placeholder="000.000.000-00"
+                        placeholder="CPF, CNPJ ou e-mail"
                         className="pl-14 2xl:pl-20 h-16 2xl:h-24 bg-white/[0.02] border-white/10 focus:border-brand-accent/50 focus:bg-white/[0.04] transition-all text-white font-bold text-xl 2xl:text-3xl rounded-[2px] placeholder:text-white/5 shadow-inner"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}

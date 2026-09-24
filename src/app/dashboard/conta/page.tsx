@@ -24,6 +24,52 @@ import { toast } from "sonner";
 import api from "@/lib/api";
 import { currentBrand } from "@/config/brand";
 
+function extractApiValue(value: unknown, fallback = "") {
+  if (value && typeof value === "object" && "present" in value) {
+    const wrapped = value as { present?: boolean; value?: unknown };
+    return wrapped.present ? String(wrapped.value || fallback) : fallback;
+  }
+
+  const text = String(value || "").trim();
+  return text || fallback;
+}
+
+function pickAccountPayload(source: Record<string, unknown>) {
+  return {
+    accountBranch: extractApiValue(source.accountBranch || source.branch || source.agencia),
+    accountNumber: extractApiValue(source.accountNumber || source.account || source.conta),
+    bankNumber: extractApiValue(source.bankNumber || source.bank || source.banco || source.bankCode),
+  };
+}
+
+function normalizeAgentUser(agent: Record<string, unknown>) {
+  const accountPayload = pickAccountPayload(agent);
+  const fullName = extractApiValue(agent.fullName || agent.name || agent.nome, "Agente G8Pay");
+  const email = extractApiValue(agent.email);
+  const cpf = extractApiValue(agent.cpf || agent.taxNumber);
+  const whatsapp = extractApiValue(agent.whatsapp);
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem("userName", fullName);
+    localStorage.setItem("userEmail", email);
+    localStorage.setItem("userCpf", cpf);
+    localStorage.setItem("userWhatsapp", whatsapp);
+    localStorage.setItem("userRole", extractApiValue(agent.role, "agent"));
+  }
+
+  return {
+    name: fullName,
+    email,
+    taxNumber: cpf,
+    cpf,
+    whatsapp,
+    status: extractApiValue(agent.status, "CONTA_PENDENTE"),
+    accountBranch: accountPayload.accountBranch,
+    accountNumber: accountPayload.accountNumber,
+    bankNumber: accountPayload.bankNumber,
+  };
+}
+
 export default function ContaPage() {
   const [userData, setUserData] = useState<any>(null);
   const [balanceData, setBalanceData] = useState<any>(null);
@@ -52,23 +98,52 @@ export default function ContaPage() {
         name: initialName,
         email: initialEmail,
         taxNumber: initialCpf,
-        status: "CONTA_APROVADA",
-        accountBranch: "0001",
-        accountNumber: "12345-6",
-        bankNumber: "389"
+        status: "CONTA_PENDENTE",
+        accountBranch: "",
+        accountNumber: "",
+        bankNumber: ""
       };
 
       setUserData(mockUser);
       setBalanceData({ valor: 0 });
 
       try {
+        const localAgentId = typeof window !== "undefined" ? localStorage.getItem("agentId") : "";
+
+        if (localAgentId) {
+          const agentRes = await api.get(`/api/agents/${localAgentId}`).catch(() => null);
+          const agentData = agentRes?.data?.data || agentRes?.data?.agent || null;
+
+          if (agentData) {
+            setUserData(normalizeAgentUser(agentData));
+          }
+        }
+
         const [userRes, balanceRes] = await Promise.all([
           api.get("/api/users/data").catch(() => null),
           api.get("/api/banco/saldo/getSaldo").catch(() => null)
         ]);
 
         if (userRes && userRes.data) {
-          setUserData(userRes.data.data || userRes.data);
+          const nextUserData = userRes.data.data || userRes.data;
+          const accountPayload = pickAccountPayload(nextUserData);
+
+          if (localAgentId) {
+            setUserData((current: any) => ({
+              ...(current || {}),
+              accountBranch: accountPayload.accountBranch || current?.accountBranch || "",
+              accountNumber: accountPayload.accountNumber || current?.accountNumber || "",
+              bankNumber: accountPayload.bankNumber || current?.bankNumber || "",
+            }));
+          } else {
+            setUserData(nextUserData);
+          }
+
+          if (localAgentId && (accountPayload.accountBranch || accountPayload.accountNumber || accountPayload.bankNumber)) {
+            void api.patch(`/api/agents/${localAgentId}`, accountPayload).catch((syncErr) => {
+              console.warn("Não foi possível sincronizar a conta do agente:", syncErr);
+            });
+          }
         }
 
         if (balanceRes && balanceRes.data) {
