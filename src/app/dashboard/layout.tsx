@@ -151,6 +151,14 @@ const menuGroups: { label?: string; items: MenuItem[] }[] = [
         ]
       },
       { icon: FileText, label: "Contratos", href: "/dashboard/contratos" },
+      {
+        icon: Banknote,
+        label: "Empréstimo",
+        href: "#",
+        submenu: [
+          { icon: CreditCard, label: "Pessoal", href: "/dashboard/emprestimo/pessoal" },
+        ],
+      },
       { icon: FolderOpen, label: "Documentos", href: "/dashboard/documentos" },
       { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
     ]
@@ -168,6 +176,7 @@ const adminMenuGroups: { label?: string; items: MenuItem[] }[] = [
         submenu: [
           { icon: Users, label: "Agentes", href: "/dashboard/compliance/agentes" },
           { icon: Store, label: "E.C.", href: "/dashboard/compliance" },
+          { icon: Banknote, label: "Crédito dos Agentes", href: "/dashboard/compliance/emprestimos" },
         ],
       },
       { icon: UserCircle, label: "Perfil", href: "/dashboard/conta" }
