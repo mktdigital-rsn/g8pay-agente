@@ -4,20 +4,28 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   CreditCard,
+  Eye,
   FileClock,
   RefreshCw,
   Search,
   TrendingUp,
-  UserCircle,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import api from "@/lib/api";
 
 type LoanKind = "personal" | "consigned" | "financing";
-type LoanStatus = "pending" | "approved" | "rejected" | "cancelled";
+type LoanStatus = "PENDENTE" | "APROVADA" | "REPROVADA" | "CANCELADA";
 
 type LoanRequest = {
   id: string;
@@ -55,13 +63,42 @@ function readRequests(): LoanRequest[] {
 
 function statusMeta(status: LoanStatus) {
   const map = {
-    pending: { label: "Pendente", helper: "Em análise", className: "bg-amber-50 text-amber-700 border-amber-200", icon: FileClock },
-    approved: { label: "Aprovada", helper: "Crédito aprovado", className: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
-    rejected: { label: "Reprovada", helper: "Análise recusada", className: "bg-rose-50 text-rose-700 border-rose-200", icon: XCircle },
-    cancelled: { label: "Cancelada", helper: "Solicitação encerrada", className: "bg-neutral-100 text-neutral-600 border-neutral-200", icon: XCircle },
+    PENDENTE: { label: "Pendente", helper: "Em análise", className: "bg-amber-50 text-amber-700 border-amber-200", icon: FileClock },
+    APROVADA: { label: "Aprovada", helper: "Crédito aprovado", className: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
+    REPROVADA: { label: "Reprovada", helper: "Análise recusada", className: "bg-rose-50 text-rose-700 border-rose-200", icon: XCircle },
+    CANCELADA: { label: "Cancelada", helper: "Solicitação encerrada", className: "bg-neutral-100 text-neutral-600 border-neutral-200", icon: XCircle },
   } satisfies Record<LoanStatus, { label: string; helper: string; className: string; icon: LucideIcon }>;
 
   return map[status];
+}
+
+
+function normalizeStatus(status: unknown): LoanStatus {
+  const value = String(status || "").toUpperCase();
+  if (value === "APROVADA" || value === "REPROVADA" || value === "CANCELADA") return value;
+  return "PENDENTE";
+}
+
+function normalizeRequest(item: Partial<LoanRequest> & Record<string, unknown>): LoanRequest {
+  return {
+    id: String(item.id || crypto.randomUUID()),
+    agentId: String(item.agentId || item.agenteId || ""),
+    agentName: String(item.agentName || item.name || item.nome || "Agente sem nome"),
+    cpf: String(item.cpf || item.taxNumber || ""),
+    email: String(item.email || ""),
+    whatsapp: String(item.whatsapp || item.phoneNumber || ""),
+    type: (item.type as LoanKind) || "personal",
+    amount: Number(item.amount || item.valor || 0),
+    termMonths: Number(item.termMonths || 12),
+    monthlyPayment: Number(item.monthlyPayment || 0),
+    status: normalizeStatus(item.status),
+    createdAt: String(item.createdAt || new Date().toISOString()),
+    updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()),
+  };
+}
+
+function getResponseStatus(error: unknown) {
+  return (error as { response?: { status?: number } })?.response?.status;
 }
 
 function typeLabel(type: LoanKind) {
@@ -80,21 +117,36 @@ export default function AdminLoanRequestsPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LoanStatus>("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
 
-  const refresh = () => {
+  const refresh = async () => {
     setIsRefreshing(true);
-    setRequests(readRequests().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    setTimeout(() => setIsRefreshing(false), 250);
+    try {
+      const response = await api.get("/api/carta-credito/admin");
+      const data: LoanRequest[] = Array.isArray(response.data?.data) ? response.data.data.map(normalizeRequest) : [];
+      setRequests(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } catch (error) {
+      if (getResponseStatus(error)) {
+        console.warn("API de crédito retornou erro:", error);
+        setRequests([]);
+        return;
+      }
+      console.warn("API de crédito indisponível, usando fallback local:", error);
+      setRequests(readRequests().map(normalizeRequest).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY) {
-        setRequests(readRequests().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        setRequests(readRequests().map(normalizeRequest).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       }
     };
 
     window.addEventListener("storage", handleStorage);
+    void refresh();
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
@@ -119,8 +171,8 @@ export default function AdminLoanRequestsPage() {
     const totalAmount = filteredRequests.reduce((sum, item) => sum + item.amount, 0);
     return {
       total: filteredRequests.length,
-      pending: filteredRequests.filter((item) => item.status === "pending").length,
-      approved: filteredRequests.filter((item) => item.status === "approved").length,
+      pending: filteredRequests.filter((item) => item.status === "PENDENTE").length,
+      approved: filteredRequests.filter((item) => item.status === "APROVADA").length,
       totalAmount,
     };
   }, [filteredRequests]);
@@ -136,10 +188,10 @@ export default function AdminLoanRequestsPage() {
               </Badge>
               <h1 className="mt-5 text-4xl font-black tracking-tight md:text-6xl">Análise de crédito dos agentes</h1>
               <p className="mt-4 max-w-3xl text-base font-bold leading-relaxed text-neutral-500">
-                Acompanhe as solicitações de empréstimo enviadas pelos agentes. A integração real com a API será plugada aqui quando o backend estiver pronto.
+                Acompanhe as solicitações de empréstimo enviadas pelos agentes e o status retornado pela análise de crédito.
               </p>
             </div>
-            <Button onClick={refresh} className="h-12 rounded-[8px] bg-[#0c0a09] px-5 text-xs font-black uppercase tracking-widest text-white hover:bg-neutral-800">
+            <Button onClick={() => void refresh()} className="h-12 rounded-[8px] bg-[#0c0a09] px-5 text-xs font-black uppercase tracking-widest text-white hover:bg-neutral-800">
               <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
               Atualizar lista
             </Button>
@@ -166,10 +218,10 @@ export default function AdminLoanRequestsPage() {
             <div className="flex flex-wrap gap-2">
               {[
                 ["all", "Todos"],
-                ["pending", "Pendentes"],
-                ["approved", "Aprovados"],
-                ["rejected", "Reprovados"],
-                ["cancelled", "Cancelados"],
+                ["PENDENTE", "Pendentes"],
+                ["APROVADA", "Aprovados"],
+                ["REPROVADA", "Reprovados"],
+                ["CANCELADA", "Cancelados"],
               ].map(([value, label]) => (
                 <button
                   key={value}
@@ -194,46 +246,83 @@ export default function AdminLoanRequestsPage() {
               <p className="mt-3 text-sm font-bold text-neutral-500">Quando agentes solicitarem crédito, o acompanhamento aparece aqui.</p>
             </div>
           ) : (
-            <div className="mt-8 grid gap-4">
-              {filteredRequests.map((request) => {
-                const meta = statusMeta(request.status);
-                const Icon = meta.icon;
-                return (
-                  <article key={request.id} className="rounded-[8px] border border-neutral-200 bg-white p-5 shadow-sm">
-                    <div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
-                      <div className="flex gap-4">
-                        <span className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-[12px] bg-orange-50 text-brand-accent md:flex">
-                          <UserCircle className="h-7 w-7" />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-3">
-                            <h3 className="text-2xl font-black tracking-tight">{request.agentName || "Agente sem nome"}</h3>
+            <div className="mt-8 overflow-hidden rounded-[8px] border border-neutral-200 bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1840px] table-fixed border-collapse">
+                  <colgroup>
+                    <col className="w-[300px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[320px]" />
+                    <col className="w-[210px]" />
+                    <col className="w-[210px]" />
+                    <col className="w-[230px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[110px]" />
+                  </colgroup>
+                  <thead className="bg-neutral-50">
+                    <tr className="border-b border-neutral-200">
+                      <TableHead>Agente</TableHead>
+                      <TableHead>CPF</TableHead>
+                      <TableHead>E-mail</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Prazo</TableHead>
+                      <TableHead>Parcela</TableHead>
+                      <TableHead>Pedido em</TableHead>
+                      <TableHead className="text-center">Detalhes</TableHead>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRequests.map((request) => {
+                      const meta = statusMeta(request.status);
+                      const Icon = meta.icon;
+                      return (
+                        <tr key={request.id} className="border-b border-neutral-100 last:border-0">
+                          <TableCell>
+                            <p className="whitespace-nowrap text-sm font-black text-[#0c0a09]">{request.agentName || "Agente sem nome"}</p>
+                          </TableCell>
+                          <TableCell>{request.cpf || "---"}</TableCell>
+                          <TableCell>{request.email || "---"}</TableCell>
+                          <TableCell>{request.whatsapp || "---"}</TableCell>
+                          <TableCell>
                             <Badge className={`rounded-[4px] border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${meta.className}`}>
                               <Icon className="mr-1.5 h-3.5 w-3.5" />
                               {meta.label}
                             </Badge>
-                          </div>
-                          <p className="mt-2 text-sm font-bold text-neutral-500">
-                            CPF {request.cpf || "---"} • {request.email || "---"} • {request.whatsapp || "---"}
-                          </p>
-                          <p className="mt-3 text-xs font-black uppercase tracking-widest text-neutral-400">
-                            {typeLabel(request.type)} • Pedido em {new Date(request.createdAt).toLocaleDateString("pt-BR")}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[520px]">
-                        <InfoBox label="Valor" value={formatCurrency(request.amount)} />
-                        <InfoBox label="Prazo" value={`${request.termMonths} meses`} />
-                        <InfoBox label="Parcela" value={formatCurrency(request.monthlyPayment)} />
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                          </TableCell>
+                          <TableCell>{typeLabel(request.type)}</TableCell>
+                          <TableCell>{formatCurrency(request.amount)}</TableCell>
+                          <TableCell>{request.termMonths} meses</TableCell>
+                          <TableCell>{formatCurrency(request.monthlyPayment)}</TableCell>
+                          <TableCell>{new Date(request.createdAt).toLocaleDateString("pt-BR")}</TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setSelectedRequest(request)}
+                              className="h-9 w-9 rounded-[7px] border-neutral-200 p-0 text-neutral-600 hover:border-brand-accent hover:text-brand-accent"
+                              title="Ver detalhes"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </section>
       </div>
+
+      <CreditDetailsDialog request={selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)} />
     </div>
   );
 }
@@ -254,11 +343,78 @@ function MetricCard({ title, value, icon: Icon }: { title: string; value: string
   );
 }
 
-function InfoBox({ label, value }: { label: string; value: string }) {
+function TableHead({ className = "", children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <th className={`whitespace-nowrap px-5 py-4 text-left text-[10px] font-black uppercase tracking-[0.22em] text-neutral-400 ${className}`}>
+      {children}
+    </th>
+  );
+}
+
+function TableCell({ className = "", children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <td className={`whitespace-nowrap px-5 py-4 align-middle text-sm font-bold text-neutral-700 ${className}`}>
+      {children}
+    </td>
+  );
+}
+
+function CreditDetailsDialog({
+  request,
+  onOpenChange,
+}: {
+  request: LoanRequest | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const meta = request ? statusMeta(request.status) : null;
+  const Icon = meta?.icon;
+
+  return (
+    <Dialog open={Boolean(request)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl rounded-[8px] border-neutral-200 p-0">
+        {request && meta && Icon ? (
+          <div>
+            <DialogHeader className="border-b border-neutral-100 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <DialogTitle className="text-2xl font-black tracking-tight text-[#0c0a09]">
+                    {request.agentName || "Agente sem nome"}
+                  </DialogTitle>
+                  <DialogDescription className="mt-2 text-sm font-bold text-neutral-500">
+                    Solicitação de {typeLabel(request.type).toLowerCase()}
+                  </DialogDescription>
+                </div>
+                <Badge className={`rounded-[4px] border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${meta.className}`}>
+                  <Icon className="mr-1.5 h-3.5 w-3.5" />
+                  {meta.label}
+                </Badge>
+              </div>
+            </DialogHeader>
+
+            <div className="grid gap-4 p-6 sm:grid-cols-2">
+              <DetailItem label="Valor solicitado" value={formatCurrency(request.amount)} />
+              <DetailItem label="Parcela estimada" value={formatCurrency(request.monthlyPayment)} />
+              <DetailItem label="Prazo" value={`${request.termMonths} meses`} />
+              <DetailItem label="Status" value={meta.helper} />
+              <DetailItem label="CPF" value={request.cpf || "---"} />
+              <DetailItem label="E-mail" value={request.email || "---"} />
+              <DetailItem label="WhatsApp" value={request.whatsapp || "---"} />
+              <DetailItem label="ID do agente" value={request.agentId || "---"} />
+              <DetailItem label="Criado em" value={new Date(request.createdAt).toLocaleString("pt-BR")} />
+              <DetailItem label="Atualizado em" value={new Date(request.updatedAt).toLocaleString("pt-BR")} />
+            </div>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[7px] border border-neutral-100 bg-neutral-50 p-4">
       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">{label}</p>
-      <p className="mt-2 text-sm font-black text-[#0c0a09]">{value}</p>
+      <p className="mt-2 break-words text-sm font-black text-[#0c0a09]">{value}</p>
     </div>
   );
 }

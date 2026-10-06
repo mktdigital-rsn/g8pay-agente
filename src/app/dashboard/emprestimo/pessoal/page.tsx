@@ -20,9 +20,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 type LoanKind = "personal" | "consigned" | "financing";
-type LoanStatus = "pending" | "approved" | "rejected" | "cancelled";
+type LoanStatus = "PENDENTE" | "APROVADA" | "REPROVADA" | "CANCELADA";
 
 type LoanRequest = {
   id: string;
@@ -91,10 +92,10 @@ function calculateMonthlyPayment(amount: number, termMonths: number) {
 
 function statusMeta(status: LoanStatus) {
   const map = {
-    pending: { label: "Pendente", helper: "Em análise", className: "bg-amber-50 text-amber-700 border-amber-200", icon: FileClock },
-    approved: { label: "Aprovada", helper: "Crédito aprovado", className: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
-    rejected: { label: "Reprovada", helper: "Análise recusada", className: "bg-rose-50 text-rose-700 border-rose-200", icon: XCircle },
-    cancelled: { label: "Cancelada", helper: "Solicitação encerrada", className: "bg-neutral-100 text-neutral-600 border-neutral-200", icon: XCircle },
+    PENDENTE: { label: "Pendente", helper: "Em análise", className: "bg-amber-50 text-amber-700 border-amber-200", icon: FileClock },
+    APROVADA: { label: "Aprovada", helper: "Crédito aprovado", className: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
+    REPROVADA: { label: "Reprovada", helper: "Análise recusada", className: "bg-rose-50 text-rose-700 border-rose-200", icon: XCircle },
+    CANCELADA: { label: "Cancelada", helper: "Solicitação encerrada", className: "bg-neutral-100 text-neutral-600 border-neutral-200", icon: XCircle },
   } satisfies Record<LoanStatus, { label: string; helper: string; className: string; icon: LucideIcon }>;
 
   return map[status];
@@ -114,6 +115,34 @@ function readRequests(): LoanRequest[] {
 
 function writeRequests(requests: LoanRequest[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(requests));
+}
+
+function normalizeStatus(status: unknown): LoanStatus {
+  const value = String(status || "").toUpperCase();
+  if (value === "APROVADA" || value === "REPROVADA" || value === "CANCELADA") return value;
+  return "PENDENTE";
+}
+
+function normalizeRequest(item: Partial<LoanRequest> & Record<string, unknown>): LoanRequest {
+  return {
+    id: String(item.id || crypto.randomUUID()),
+    agentId: String(item.agentId || item.agenteId || ""),
+    agentName: String(item.agentName || item.name || item.nome || ""),
+    cpf: String(item.cpf || item.taxNumber || ""),
+    email: String(item.email || ""),
+    whatsapp: String(item.whatsapp || item.phoneNumber || ""),
+    type: (item.type as LoanKind) || "personal",
+    amount: Number(item.amount || item.valor || 0),
+    termMonths: Number(item.termMonths || 12),
+    monthlyPayment: Number(item.monthlyPayment || 0),
+    status: normalizeStatus(item.status),
+    createdAt: String(item.createdAt || new Date().toISOString()),
+    updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()),
+  };
+}
+
+function getResponseStatus(error: unknown) {
+  return (error as { response?: { status?: number } })?.response?.status;
 }
 
 export default function PersonalLoanPage() {
@@ -138,10 +167,23 @@ export default function PersonalLoanPage() {
     [requests, user.agentId]
   );
 
-  const refreshRequests = () => {
+  const refreshRequests = async () => {
     setIsRefreshing(true);
-    setRequests(readRequests().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    setTimeout(() => setIsRefreshing(false), 250);
+    try {
+      const response = await api.get("/api/carta-credito/agent");
+      const data: LoanRequest[] = Array.isArray(response.data?.data) ? response.data.data.map(normalizeRequest) : [];
+      setRequests(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } catch (error) {
+      if (getResponseStatus(error)) {
+        console.warn("API de crédito retornou erro:", error);
+        setRequests([]);
+        return;
+      }
+      console.warn("API de crédito indisponível, usando fallback local:", error);
+      setRequests(readRequests().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -153,7 +195,7 @@ export default function PersonalLoanPage() {
       email: window.localStorage.getItem("userEmail") || "",
       whatsapp: window.localStorage.getItem("userWhatsapp") || "",
     });
-    refreshRequests();
+    void refreshRequests();
   }, []);
 
   const handleSubmit = async () => {
@@ -176,28 +218,57 @@ export default function PersonalLoanPage() {
         amount,
         termMonths,
         monthlyPayment,
-        status: "pending",
+        status: "PENDENTE",
         createdAt: now,
         updatedAt: now,
       };
 
-      const nextRequests = [nextRequest, ...readRequests()];
-      writeRequests(nextRequests);
-      setRequests(nextRequests);
+      try {
+        const response = await api.post("/api/carta-credito/agent", {
+          amount,
+          termMonths,
+          monthlyPayment,
+          type: selectedType,
+        });
+        const created = normalizeRequest(response.data?.data || response.data || nextRequest);
+        setRequests((current) => [created, ...current]);
+      } catch (error) {
+        if (getResponseStatus(error)) {
+          console.warn("API de crédito retornou erro ao criar solicitação:", error);
+          toast.error("Não foi possível enviar a solicitação agora.");
+          return;
+        }
+        console.warn("API de crédito indisponível, salvando fallback local:", error);
+        const nextRequests = [nextRequest, ...readRequests()];
+        writeRequests(nextRequests);
+        setRequests(nextRequests);
+      }
       toast.success("Solicitação enviada para análise de crédito.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const cancelRequest = (id: string) => {
-    const nextRequests = readRequests().map((request) =>
-      request.id === id && request.status === "pending"
-        ? { ...request, status: "cancelled" as const, updatedAt: new Date().toISOString() }
-        : request
-    );
-    writeRequests(nextRequests);
-    setRequests(nextRequests);
+  const cancelRequest = async (id: string) => {
+    try {
+      const response = await api.post(`/api/carta-credito/agent/${encodeURIComponent(id)}/cancelar`);
+      const canceled = normalizeRequest(response.data?.data || response.data);
+      setRequests((current) => current.map((request) => request.id === id ? canceled : request));
+    } catch (error) {
+      if (getResponseStatus(error)) {
+        console.warn("API de crédito retornou erro ao cancelar solicitação:", error);
+        toast.error("Não foi possível cancelar essa solicitação.");
+        return;
+      }
+      console.warn("API de crédito indisponível, cancelando fallback local:", error);
+      const nextRequests = readRequests().map((request) =>
+        request.id === id && request.status === "PENDENTE"
+          ? { ...request, status: "CANCELADA" as const, updatedAt: new Date().toISOString() }
+          : request
+      );
+      writeRequests(nextRequests);
+      setRequests(nextRequests);
+    }
     toast.success("Solicitação cancelada.");
   };
 
@@ -392,8 +463,8 @@ export default function PersonalLoanPage() {
                     </div>
                     <Button
                       variant="outline"
-                      disabled={request.status !== "pending"}
-                      onClick={() => cancelRequest(request.id)}
+                      disabled={request.status !== "PENDENTE"}
+                      onClick={() => void cancelRequest(request.id)}
                       className="h-11 rounded-[6px] border-neutral-200 text-xs font-black uppercase tracking-widest disabled:opacity-40"
                     >
                       Cancelar solicitação
