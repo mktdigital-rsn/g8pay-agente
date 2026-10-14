@@ -168,19 +168,21 @@ export default function AdminLoanRequestsPage() {
   }, [query, requests, statusFilter]);
 
   const metrics = useMemo(() => {
-    const totalAmount = filteredRequests.reduce((sum, item) => sum + item.amount, 0);
+    const totalAmount = requests.reduce((sum, item) => sum + item.amount, 0);
+    const approvedRequests = requests.filter((item) => item.status === "APROVADA");
     return {
-      total: filteredRequests.length,
-      pending: filteredRequests.filter((item) => item.status === "PENDENTE").length,
-      approved: filteredRequests.filter((item) => item.status === "APROVADA").length,
+      total: requests.length,
+      pending: requests.filter((item) => item.status === "PENDENTE").length,
+      approved: approvedRequests.length,
+      approvedAmount: approvedRequests.reduce((sum, item) => sum + item.amount, 0),
       totalAmount,
     };
-  }, [filteredRequests]);
+  }, [requests]);
 
   return (
     <div className="min-h-screen w-full overflow-y-auto bg-[#f8f9fa] text-[#0c0a09]">
-      <div className="mx-auto flex max-w-[1800px] flex-col gap-8 p-3 sm:p-5 md:p-10 2xl:p-14">
-        <section className="rounded-[8px] bg-white p-6 shadow-sm md:p-10">
+      <div className="mx-auto flex max-w-[1900px] flex-col gap-6 p-2 sm:p-4 md:p-6 2xl:p-8">
+        <section className="rounded-[8px] bg-white p-5 shadow-sm md:p-7">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <Badge className="rounded-[4px] border-0 bg-orange-50 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.28em] text-brand-accent">
@@ -197,10 +199,17 @@ export default function AdminLoanRequestsPage() {
             </Button>
           </div>
 
-          <div className="mt-9 grid gap-4 md:grid-cols-3">
-            <MetricCard title="Solicitações" value={String(metrics.total)} icon={CreditCard} />
-            <MetricCard title="Em análise" value={String(metrics.pending)} icon={FileClock} />
-            <MetricCard title="Volume solicitado" value={formatCurrency(metrics.totalAmount)} icon={TrendingUp} />
+          <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard title="Solicitações" value={String(metrics.total)} icon={CreditCard} tone="blue" />
+            <MetricCard title="Em análise" value={String(metrics.pending)} icon={FileClock} tone="amber" />
+            <MetricCard title="Volume solicitado" value={formatCurrency(metrics.totalAmount)} icon={TrendingUp} tone="orange" />
+            <MetricCard
+              title="Volume aprovado"
+              value={formatCurrency(metrics.approvedAmount)}
+              helper={metrics.approved === 1 ? "1 solicitação aprovada" : `${metrics.approved} solicitações aprovadas`}
+              icon={CheckCircle2}
+              tone="green"
+            />
           </div>
         </section>
 
@@ -327,18 +336,22 @@ export default function AdminLoanRequestsPage() {
   );
 }
 
-function MetricCard({ title, value, icon: Icon }: { title: string; value: string; icon: LucideIcon }) {
+function MetricCard({ title, value, helper, icon: Icon, tone }: { title: string; value: string; helper?: string; icon: LucideIcon; tone: "blue" | "amber" | "orange" | "green" }) {
+  const toneClasses = {
+    blue: "border-l-sky-400 bg-sky-50/30",
+    amber: "border-l-amber-400 bg-amber-50/30",
+    orange: "border-l-brand-accent bg-orange-50/30",
+    green: "border-l-emerald-400 bg-emerald-50/30",
+  }[tone];
+
   return (
-    <div className="rounded-[8px] border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-neutral-400">{title}</p>
-          <p className="mt-3 text-3xl font-black tracking-tight">{value}</p>
-        </div>
-        <span className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-orange-50 text-brand-accent">
-          <Icon className="h-6 w-6" />
-        </span>
-      </div>
+    <div className={`relative min-h-[132px] min-w-0 rounded-[8px] border border-neutral-200 border-l-4 p-5 shadow-sm xl:p-6 ${toneClasses}`}>
+      <p className="max-w-[72%] text-[11px] font-black uppercase leading-relaxed tracking-[0.2em] text-neutral-400">{title}</p>
+      <p className="mt-5 whitespace-nowrap text-2xl font-black tracking-tight xl:text-3xl">{value}</p>
+      {helper ? <p className="mt-2 max-w-[72%] text-xs font-bold leading-relaxed text-neutral-500">{helper}</p> : null}
+      <span className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-[12px] bg-white text-brand-accent shadow-sm xl:right-6 xl:top-6">
+        <Icon className="h-6 w-6" />
+      </span>
     </div>
   );
 }

@@ -360,7 +360,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                 <Video className="h-7 w-7 text-brand-accent shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[12px] uppercase tracking-wider text-neutral-500 font-bold block mb-1">Página de Agendamento Oficial (Google Calendar)</span>
-                  <a href={process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/calendar/appointments/schedules/AcZssZ0OKuT4pGjOxw8Smyi6RAkxRMVGEWMw9iK_5JbnolhiqHX8zspaM-Czcl6tPCIGXPpPfMkiWhf6"} target="_blank" rel="noreferrer" className="text-brand-accent hover:underline inline-flex items-center gap-1.5 font-black text-lg">
+                  <a href={process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_URL || "https://calendar.google.com/appointments/schedules/AcZssZ0OKuT4pGjOxw8Smyi6RAkxRMVGEWMw9iK_5JbnolhiqHX8zspaM-Czcl6tPCIGXPpPfMkiWhf6"} target="_blank" rel="noreferrer" className="text-brand-accent hover:underline inline-flex items-center gap-1.5 font-black text-lg">
                     Abrir Página de Agendamentos <ExternalLink className="h-4 w-4" />
                   </a>
                 </div>
@@ -369,7 +369,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
               <div className="flex items-start gap-5 text-base">
                 <Mail className="h-7 w-7 text-neutral-400 shrink-0 mt-0.5" />
                 <p className="text-neutral-300 leading-relaxed text-sm md:text-base">
-                  Se a nova aba não abriu ou você a fechou sem querer, use o link acima para escolher o dia e hora para falar com a equipe <strong className="text-white">mktdigital.rsn@gmail.com</strong>.
+                  Se a nova aba não abriu ou você a fechou sem querer, use o link acima para escolher o dia e hora para falar com a equipe <strong className="text-white">agendamentog8pay@gmail.com</strong>.
                 </p>
               </div>
             </div>
@@ -751,7 +751,7 @@ export default function CommercialScheduling({ onBack }: CommercialSchedulingPro
                       <div className="space-y-2">
                         <h4 className="text-base font-black text-white">Integração Google Calendar</h4>
                         <p className="text-sm text-neutral-400 leading-relaxed">
-                          Ao clicar em confirmar, salvaremos seu contato comercial no sistema da G8Pay e abriremos a tela oficial de agendamentos da conta <strong className="text-white">mktdigital.rsn@gmail.com</strong> para você escolher o dia e hora de sua preferência.
+                          Ao clicar em confirmar, salvaremos seu contato comercial no sistema da G8Pay e abriremos a tela oficial de agendamentos da conta <strong className="text-white">agendamentog8pay@gmail.com</strong> para você escolher o dia e hora de sua preferência.
                         </p>
                       </div>
 
