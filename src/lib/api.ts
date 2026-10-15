@@ -1,5 +1,8 @@
 import axios from 'axios';
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://agentes-api.bancog8dev.workers.dev';
+const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://agentes-api.bancog8dev.workers.dev';
+const BASE_URL = /^https?:\/\//i.test(configuredBaseUrl)
+  ? configuredBaseUrl.replace(/\/+$/, '')
+  : `https://${configuredBaseUrl.replace(/^\/+/, '').replace(/\/+$/, '')}`;
 
 export const getDeviceId = () => {
   if (typeof window === 'undefined') return 'IB-WEB-PLATFORM';

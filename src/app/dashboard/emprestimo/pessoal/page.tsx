@@ -101,6 +101,14 @@ function statusMeta(status: LoanStatus) {
   return map[status];
 }
 
+function creditSla(createdAt: string, status: LoanStatus) {
+  if (status !== "PENDENTE") return null;
+  const timestamp = new Date(createdAt).getTime();
+  if (Number.isNaN(timestamp)) return null;
+  const days = Math.max(0, Math.floor((Date.now() - timestamp) / 86400000));
+  return days >= 5 ? `SLA crítico • D+${days}` : days >= 3 ? `SLA médio • D+${days}` : `SLA baixo • D+${days}`;
+}
+
 function readRequests(): LoanRequest[] {
   if (typeof window === "undefined") return [];
 
@@ -444,6 +452,7 @@ export default function PersonalLoanPage() {
               {visibleRequests.map((request) => {
                 const meta = statusMeta(request.status);
                 const Icon = meta.icon;
+                const sla = creditSla(request.createdAt, request.status);
                 return (
                   <div key={request.id} className="grid gap-4 rounded-[8px] border border-neutral-200 bg-white p-5 shadow-sm lg:grid-cols-[1fr_auto] lg:items-center">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -459,6 +468,7 @@ export default function PersonalLoanPage() {
                         <p className="mt-1 text-sm font-bold text-neutral-500">
                           Parcela estimada de {formatCurrency(request.monthlyPayment)} • Criada em {new Date(request.createdAt).toLocaleDateString("pt-BR")}
                         </p>
+                        {sla && <p className="mt-2 text-xs font-black uppercase tracking-widest text-amber-700">{sla}</p>}
                       </div>
                     </div>
                     <Button

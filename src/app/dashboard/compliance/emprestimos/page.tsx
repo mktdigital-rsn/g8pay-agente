@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   CheckCircle2,
   CreditCard,
   Eye,
@@ -70,6 +71,16 @@ function statusMeta(status: LoanStatus) {
   } satisfies Record<LoanStatus, { label: string; helper: string; className: string; icon: LucideIcon }>;
 
   return map[status];
+}
+
+function creditSla(createdAt: string, status: LoanStatus) {
+  if (status !== "PENDENTE") return null;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return null;
+  const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
+  const level = days >= 5 ? "Crítico" : days >= 3 ? "Médio" : "Baixo";
+  const className = days >= 5 ? "border-red-200 bg-red-50 text-red-700" : days >= 3 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return { days, level, className };
 }
 
 
@@ -170,12 +181,21 @@ export default function AdminLoanRequestsPage() {
   const metrics = useMemo(() => {
     const totalAmount = requests.reduce((sum, item) => sum + item.amount, 0);
     const approvedRequests = requests.filter((item) => item.status === "APROVADA");
+    const pendingRequests = requests.filter((item) => item.status === "PENDENTE");
+    const slaCounts = pendingRequests.reduce((acc, item) => {
+      const sla = creditSla(item.createdAt, item.status);
+      if (sla?.level === "Baixo") acc.low += 1;
+      if (sla?.level === "Médio") acc.medium += 1;
+      if (sla?.level === "Crítico") acc.critical += 1;
+      return acc;
+    }, { low: 0, medium: 0, critical: 0 });
     return {
       total: requests.length,
       pending: requests.filter((item) => item.status === "PENDENTE").length,
       approved: approvedRequests.length,
       approvedAmount: approvedRequests.reduce((sum, item) => sum + item.amount, 0),
       totalAmount,
+      slaCounts,
     };
   }, [requests]);
 
@@ -210,6 +230,11 @@ export default function AdminLoanRequestsPage() {
               icon={CheckCircle2}
               tone="green"
             />
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <MetricCard title="SLA baixo" value={String(metrics.slaCounts.low)} helper="Solicitações dentro do prazo inicial" icon={CheckCircle2} tone="green" />
+            <MetricCard title="SLA médio" value={String(metrics.slaCounts.medium)} helper="Solicitações em atenção desde D+3" icon={FileClock} tone="amber" />
+            <MetricCard title="SLA crítico" value={String(metrics.slaCounts.critical)} helper="Solicitações pendentes desde D+5" icon={AlertCircle} tone="orange" />
           </div>
         </section>
 
@@ -283,6 +308,7 @@ export default function AdminLoanRequestsPage() {
                       <TableHead>Prazo</TableHead>
                       <TableHead>Parcela</TableHead>
                       <TableHead>Pedido em</TableHead>
+                      <TableHead>SLA</TableHead>
                       <TableHead className="text-center">Detalhes</TableHead>
                     </tr>
                   </thead>
@@ -290,6 +316,7 @@ export default function AdminLoanRequestsPage() {
                     {filteredRequests.map((request) => {
                       const meta = statusMeta(request.status);
                       const Icon = meta.icon;
+                      const sla = creditSla(request.createdAt, request.status);
                       return (
                         <tr key={request.id} className="border-b border-neutral-100 last:border-0">
                           <TableCell>
@@ -309,6 +336,7 @@ export default function AdminLoanRequestsPage() {
                           <TableCell>{request.termMonths} meses</TableCell>
                           <TableCell>{formatCurrency(request.monthlyPayment)}</TableCell>
                           <TableCell>{new Date(request.createdAt).toLocaleDateString("pt-BR")}</TableCell>
+                          <TableCell>{sla ? <Badge className={`rounded-[4px] border px-3 py-1 text-[10px] font-black uppercase tracking-widest ${sla.className}`}>{sla.level} • D+{sla.days}</Badge> : <span className="text-neutral-400">---</span>}</TableCell>
                           <TableCell className="text-center">
                             <Button
                               type="button"
@@ -409,6 +437,7 @@ function CreditDetailsDialog({
               <DetailItem label="Parcela estimada" value={formatCurrency(request.monthlyPayment)} />
               <DetailItem label="Prazo" value={`${request.termMonths} meses`} />
               <DetailItem label="Status" value={meta.helper} />
+              <DetailItem label="SLA da análise" value={creditSla(request.createdAt, request.status) ? `${creditSla(request.createdAt, request.status)?.level} • D+${creditSla(request.createdAt, request.status)?.days}` : request.status === "PENDENTE" ? "Sem SLA" : "Encerrado"} />
               <DetailItem label="CPF" value={request.cpf || "---"} />
               <DetailItem label="E-mail" value={request.email || "---"} />
               <DetailItem label="WhatsApp" value={request.whatsapp || "---"} />

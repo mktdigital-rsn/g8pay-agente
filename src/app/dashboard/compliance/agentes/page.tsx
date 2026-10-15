@@ -36,6 +36,7 @@ type AgentCrmRecord = {
   email?: string;
   whatsapp?: string;
   status?: string;
+  accessReleased?: boolean;
   birthDate?: string;
   cep?: string;
   street?: string;
@@ -163,6 +164,20 @@ function statusBadge(contractStatus: AgentCrmRecord["contractStatus"]) {
       Pendente
     </Badge>
   );
+}
+
+function contractSla(createdAt?: string, status?: string) {
+  if (status === "signed" || !createdAt) return null;
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return null;
+  const days = Math.max(0, Math.floor((Date.now() - created.getTime()) / 86400000));
+  const level = days >= 5 ? "Crítico" : days >= 3 ? "Médio" : "Baixo";
+  const classes = days >= 5
+    ? "border-red-200 bg-red-50 text-red-700"
+    : days >= 3
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return { days, level, classes };
 }
 
 function csvEscape(value: string) {
@@ -303,7 +318,8 @@ export default function ComplianceAgentsPage() {
     number: firstString(raw.number, raw.numero, raw.addressNumber),
     complement: firstString(raw.complement, raw.complemento, raw.addressComplement),
     neighborhood: firstString(raw.neighborhood, raw.bairro, raw.district),
-    status: String(raw.status || (raw.contractStatus === "signed" ? "active" : "pending")),
+    status: String(raw.status || "pending"),
+    accessReleased: raw.accessReleased === true || raw.accessReleased === 1,
     bankNumber: firstString(raw.bankNumber, raw.banco, raw.bank, raw.bankCode),
     accountBranch: firstString(raw.accountBranch, raw.agencia, raw.branch),
     accountNumber: firstString(raw.accountNumber, raw.conta, raw.account),
@@ -576,11 +592,11 @@ export default function ComplianceAgentsPage() {
   };
 
   const handleAdminAgentAction = async (agent: AgentCrmRecord, action: "reset-password" | "unlock") => {
-    const actionLabel = action === "reset-password" ? "resetar a senha" : "desbloquear o acesso";
+    const actionLabel = action === "reset-password" ? "resetar a senha" : "liberar o acesso";
     const confirmed = window.confirm(`Deseja ${actionLabel} de ${agent.fullName}?`);
     if (!confirmed) return;
 
-    const toastId = toast.loading(action === "reset-password" ? "Gerando senha temporária..." : "Desbloqueando acesso...");
+    const toastId = toast.loading(action === "reset-password" ? "Gerando senha temporária..." : "Liberando acesso...");
 
     try {
       const endpoint = action === "reset-password" ? "admin-reset-password" : "admin-unlock";
@@ -723,7 +739,7 @@ export default function ComplianceAgentsPage() {
                 Contrato
               </div>
               {(["all", "signed", "pending"] as const).map((value) => (
-                <button
+          <button
                   key={value}
                   type="button"
                   onClick={() => setContractFilter(value)}
@@ -898,7 +914,7 @@ export default function ComplianceAgentsPage() {
                           className="inline-flex items-center gap-2 rounded-[2px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100"
                         >
                           <LockOpen className="h-3.5 w-3.5" />
-                          Desbloquear
+                          {selectedAgent.accessReleased ? "Acesso liberado" : "Liberar acesso"}
                         </button>
                       </div>
                     </div>
@@ -939,9 +955,13 @@ export default function ComplianceAgentsPage() {
                           <div key={contract.id} className="rounded-[2px] border border-neutral-100 bg-neutral-50 p-3 flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-xs font-black uppercase tracking-tight text-[#0c0a09] truncate">{contract.title}</p>
-                              <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
-                                {contract.status === "signed" ? "Assinado" : "Pendente"} • {formatDate(contract.signedAt || contract.updatedAt || contract.createdAt)}
-                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+                                <span>{contract.status === "signed" ? "Assinado" : "Pendente"} • {formatDate(contract.signedAt || contract.updatedAt || contract.createdAt)}</span>
+                                {(() => {
+                                  const sla = contractSla(contract.createdAt, contract.status);
+                                  return sla ? <span className={`rounded-full border px-2 py-1 ${sla.classes}`}>SLA {sla.level} • D+{sla.days}</span> : null;
+                                })()}
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               <a
