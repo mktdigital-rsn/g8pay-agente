@@ -14,7 +14,10 @@ import {
   Calendar,
   ChevronRight,
   TrendingUp,
-  Award
+  Award,
+  AlertTriangle,
+  Clock3,
+  Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,6 +30,13 @@ export default function DashboardHome() {
   const [userName, setUserName] = useState("Agente G8Pay");
   const [agentData, setAgentData] = useState<any>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const establishmentStats = {
+    total: Number(agentData?.totalEstablishments || agentData?.establishments?.length || 0),
+    approved: Number(agentData?.approvedEstablishments || 0),
+    pending: Number(agentData?.pendingEstablishments || 0),
+    rejected: Number(agentData?.rejectedEstablishments || 0),
+  };
 
   useEffect(() => {
     // Load from localStorage if present
@@ -116,49 +126,39 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Operational indicators */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           
-          <Card className="bg-white border border-neutral-100 p-8 rounded-sm shadow-xl hover:-translate-y-1 transition-transform duration-300 flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Status do Agente</p>
-              <h3 className="text-2xl font-black text-[#0c0a09]">Ativo & Operacional</h3>
-              <p className="text-xs text-emerald-600 font-bold flex items-center gap-1.5 mt-2">
-                <CheckCircle2 className="h-4 w-4" /> Cadastro Homologado
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-sm flex items-center justify-center">
-              <UserCheck className="h-7 w-7" />
-            </div>
-          </Card>
-
-          <Card className="bg-white border border-neutral-100 p-8 rounded-sm shadow-xl hover:-translate-y-1 transition-transform duration-300 flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Contratos Registrados</p>
-              <h3 className="text-2xl font-black text-[#0c0a09]">{agentData ? "1 Assinado" : "Nenhum contrato"}</h3>
-              <p className="text-xs text-neutral-400 font-bold mt-2">
-                {agentData ? `Último termo: ${agentData.date}` : "Aguardando onboarding"}
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-sm flex items-center justify-center">
-              <FileText className="h-7 w-7" />
-            </div>
-          </Card>
-
-          <Card className="bg-white border border-neutral-100 p-8 rounded-sm shadow-xl hover:-translate-y-1 transition-transform duration-300 flex items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-xs font-black text-neutral-400 uppercase tracking-widest">Total de Indicações</p>
-              <h3 className="text-2xl font-black text-[#0c0a09]">0 Cadastros</h3>
-              <p className="text-xs text-neutral-400 font-bold mt-2">
-                Indique comerciantes e ganhe comissões
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-purple-50 text-purple-500 rounded-sm flex items-center justify-center">
-              <Users className="h-7 w-7" />
-            </div>
-          </Card>
+          <DashboardMetric title="Comissões (mês)" value="R$ 0,00" detail="Dados em atualização" icon={TrendingUp} tone="orange" />
+          <DashboardMetric title="Total de clientes E.C." value={String(establishmentStats.total)} detail="Na sua carteira" icon={Users} tone="blue" />
+          <DashboardMetric title="E.C. aprovados" value={String(establishmentStats.approved)} detail="Credenciamentos homologados" icon={CheckCircle2} tone="green" />
+          <DashboardMetric title="Com pendências" value={String(establishmentStats.pending + establishmentStats.rejected)} detail={establishmentStats.rejected > 0 ? `${establishmentStats.rejected} recusado(s)` : "Nenhuma ação pendente"} icon={AlertTriangle} tone="red" />
 
         </div>
+
+        {/* Portfolio overview */}
+        <Card className="rounded-sm border border-neutral-100 bg-white p-6 shadow-xl md:p-8">
+          <div className="mb-6 flex flex-col gap-3 border-b border-neutral-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-xl font-black tracking-tight text-[#0c0a09]"><Store className="h-5 w-5 text-brand-accent" /> Meus clientes E.C.</h2>
+              <p className="mt-1 text-xs font-bold text-neutral-400">Acompanhe os credenciamentos solicitados pela sua indicação.</p>
+            </div>
+            <Button variant="outline" onClick={() => window.location.href = "/dashboard/meus-clientes"} className="h-10 rounded-sm border-neutral-200 px-4 text-[10px] font-black uppercase tracking-widest">
+              Ver carteira <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <PortfolioColumn label="Pendentes" count={establishmentStats.pending} tone="amber" />
+            <PortfolioColumn label="Em análise" count={0} tone="blue" />
+            <PortfolioColumn label="Aprovados" count={establishmentStats.approved} tone="green" />
+            <PortfolioColumn label="Com pendências" count={establishmentStats.rejected} tone="red" />
+          </div>
+
+          {establishmentStats.total === 0 ? (
+            <div className="mt-4 rounded-sm border border-dashed border-neutral-200 py-8 text-center text-sm font-bold text-neutral-400">Nenhum estabelecimento nesta etapa.</div>
+          ) : null}
+        </Card>
 
         {/* Detail Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -334,6 +334,61 @@ export default function DashboardHome() {
         </div>
 
       </div>
+    </div>
+  );
+}
+
+function DashboardMetric({
+  title,
+  value,
+  detail,
+  icon: Icon,
+  tone,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: "orange" | "blue" | "green" | "red";
+}) {
+  const tones = {
+    orange: "border-l-brand-accent bg-orange-50/30 text-brand-accent",
+    blue: "border-l-sky-400 bg-sky-50/30 text-sky-600",
+    green: "border-l-emerald-400 bg-emerald-50/30 text-emerald-600",
+    red: "border-l-rose-400 bg-rose-50/30 text-rose-600",
+  }[tone];
+
+  return (
+    <Card className={`min-w-0 rounded-sm border border-neutral-100 border-l-4 p-5 shadow-xl transition-shadow hover:shadow-2xl ${tones}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-neutral-400">{title}</p>
+          <p className="mt-3 whitespace-nowrap text-2xl font-black text-[#0c0a09]">{value}</p>
+          <p className="mt-3 text-xs font-bold text-neutral-500">{detail}</p>
+        </div>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-white shadow-sm">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+function PortfolioColumn({ label, count, tone }: { label: string; count: number; tone: "amber" | "blue" | "green" | "red" }) {
+  const tones = {
+    amber: "bg-amber-50 border-amber-100 text-amber-700",
+    blue: "bg-sky-50 border-sky-100 text-sky-700",
+    green: "bg-emerald-50 border-emerald-100 text-emerald-700",
+    red: "bg-rose-50 border-rose-100 text-rose-700",
+  }[tone];
+
+  return (
+    <div className={`flex items-center justify-between rounded-sm border px-4 py-4 ${tones}`}>
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-current" />
+        <span className="text-xs font-black uppercase tracking-widest">{label}</span>
+      </div>
+      <span className="text-xl font-black">{count}</span>
     </div>
   );
 }
