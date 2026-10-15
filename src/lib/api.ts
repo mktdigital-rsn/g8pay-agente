@@ -1,8 +1,10 @@
 import axios from 'axios';
-const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://agentes-api.bancog8dev.workers.dev';
-const BASE_URL = /^https?:\/\//i.test(configuredBaseUrl)
-  ? configuredBaseUrl.replace(/\/+$/, '')
-  : `https://${configuredBaseUrl.replace(/^\/+/, '').replace(/\/+$/, '')}`;
+
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim() || 'https://agentes-api.bancog8dev.workers.dev';
+// NEXT_PUBLIC_API_URL must resolve to the API host, not a relative path on the frontend host.
+const BASE_URL = /^https?:\/\//i.test(configuredApiUrl)
+  ? configuredApiUrl.replace(/\/+$/, '')
+  : `https://${configuredApiUrl.replace(/^\/+|\/+$/g, '')}`;
 
 export const getDeviceId = () => {
   if (typeof window === 'undefined') return 'IB-WEB-PLATFORM';
